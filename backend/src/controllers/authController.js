@@ -7,7 +7,6 @@ const register = async (req, res) => {
     try {
         const { username, password } = req.body;
 
-        // Basic Validation
         if (!username || !password) {
             return res.status(400).json({
                 success: false,
@@ -41,7 +40,6 @@ const login = async (req, res) => {
     try {
         const { username, password } = req.body;
 
-        // Basic Validation
         if (!username || !password) {
             return res.status(400).json({
                 success: false,
@@ -69,7 +67,22 @@ const login = async (req, res) => {
     }
 };
 
+/**
+ * Get authenticated user's profile
+ */
+const getProfile = async (req, res) => {
+    return res.status(200).json({
+        success: true,
+        user: {
+            id: req.user.id,
+            username: req.user.username,
+            role: req.user.role,
+        },
+    });
+};
+
 module.exports = {
     register,
     login,
+    getProfile,
 };

@@ -1,19 +1,21 @@
 const express = require("express");
 
 const authController = require("../controllers/authController");
+const authenticateToken = require("../middleware/authMiddleware");
 
 const router = express.Router();
 
-/*
- * Register Employee
- * POST /api/auth/register
- */
+// Register
 router.post("/register", authController.register);
 
-/*
- * Login User
- * POST /api/auth/login
- */
+// Login
 router.post("/login", authController.login);
+
+// Protected profile
+router.get(
+    "/profile",
+    authenticateToken,
+    authController.getProfile
+);
 
 module.exports = router;
