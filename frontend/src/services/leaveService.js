@@ -27,17 +27,27 @@ export const getMyLeaves = async () => {
 
 
 // Update an existing pending leave
-export const updateLeave = async (
-    id,
-    leaveData
-) => {
+export const updateLeave = async (id, leaveData) => {
+
+    const formData = new FormData();
+
+    formData.append("reason", leaveData.reason);
+    formData.append("startDate", leaveData.startDate);
+    formData.append("endDate", leaveData.endDate);
+
+    if (leaveData.document) {
+        formData.append("document", leaveData.document);
+    }
+
+    console.log("========== UPDATE FORM DATA ==========");
+    console.log("File:", leaveData.document);
+    console.log("File name:", leaveData.document?.name);
+    console.log("File type:", leaveData.document?.type);
+    console.log("======================================");
+
     const response = await api.put(
         `/leaves/${id}`,
-        {
-            reason: leaveData.reason,
-            startDate: leaveData.startDate,
-            endDate: leaveData.endDate,
-        }
+        formData
     );
 
     return response.data;

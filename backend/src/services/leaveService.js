@@ -1,4 +1,5 @@
 const pool = require("../config/db");
+const cloudinary = require("cloudinary").v2;
 
 // ========================================
 // CREATE LEAVE REQUEST
@@ -263,7 +264,6 @@ const getMyLeaveRequests = async (
     return result.rows;
 };
 
-
 // ========================================
 // UPDATE LEAVE REQUEST
 // ========================================
@@ -273,7 +273,8 @@ const updateLeaveRequest = async (
     employeeId,
     reason,
     startDate,
-    endDate
+    endDate,
+    file
 ) => {
 
     const client = await pool.connect();
@@ -287,24 +288,40 @@ const updateLeaveRequest = async (
         await client.query("BEGIN");
 
         // ========================================
-        // 1. FIND EXISTING LEAVE
+        // 1. GET EXISTING LEAVE + DOCUMENT
         // ========================================
 
         const existingResult =
             await client.query(
                 `
                 SELECT
-                    id,
-                    status
-                FROM leave_requests
-                WHERE id = $1
-                AND employee_id = $2
+                    lr.id AS leave_id,
+                    lr.status,
+
+                    ld.id AS document_id,
+                    ld.original_name,
+                    ld.stored_name,
+                    ld.file_path,
+                    ld.mime_type,
+                    ld.file_size
+
+                FROM leave_requests lr
+
+                LEFT JOIN leave_documents ld
+                    ON lr.id = ld.leave_request_id
+
+                WHERE lr.id = $1
+                AND lr.employee_id = $2
                 `,
                 [
                     leaveId,
                     employeeId,
                 ]
             );
+
+        // ========================================
+        // CHECK LEAVE EXISTS
+        // ========================================
 
         if (
             existingResult.rows.length === 0
@@ -319,7 +336,7 @@ const updateLeaveRequest = async (
             existingResult.rows[0];
 
         // ========================================
-        // 2. ONLY PENDING LEAVES CAN BE UPDATED
+        // ONLY PENDING LEAVES CAN BE UPDATED
         // ========================================
 
         if (
@@ -332,7 +349,17 @@ const updateLeaveRequest = async (
         }
 
         // ========================================
-        // 3. UPDATE LEAVE REQUEST
+        // SAVE OLD CLOUDINARY INFORMATION
+        // ========================================
+
+        const oldFilePublicId =
+            existing.stored_name;
+
+        const oldMimeType =
+            existing.mime_type;
+
+        // ========================================
+        // 2. UPDATE LEAVE REQUEST
         // ========================================
 
         const updateResult =
@@ -369,14 +396,138 @@ const updateLeaveRequest = async (
             updateResult.rows[0];
 
         // ========================================
-        // 4. COMMIT
+        // 3. NEW FILE WAS UPLOADED
+        // ========================================
+
+        if (file) {
+
+            console.log(
+                "========================================"
+            );
+
+            console.log(
+                "NEW FILE UPLOADED TO CLOUDINARY"
+            );
+
+            console.log(
+                "Original name:",
+                file.originalname
+            );
+
+            console.log(
+                "New Public ID:",
+                file.filename
+            );
+
+            console.log(
+                "New URL:",
+                file.path
+            );
+
+            console.log(
+                "MIME type:",
+                file.mimetype
+            );
+
+            console.log(
+                "========================================"
+            );
+
+            // ========================================
+            // UPDATE EXISTING DOCUMENT
+            // ========================================
+
+            if (existing.document_id) {
+
+                await client.query(
+                    `
+                    UPDATE leave_documents
+                    SET
+                        original_name = $1,
+                        stored_name = $2,
+                        file_path = $3,
+                        mime_type = $4,
+                        file_size = $5
+                    WHERE id = $6
+                    `,
+                    [
+                        file.originalname,
+                        file.filename,
+                        file.path,
+                        file.mimetype,
+                        file.size,
+                        existing.document_id,
+                    ]
+                );
+
+            }
+
+            // ========================================
+            // IF DOCUMENT DOES NOT EXIST
+            // ========================================
+
+            else {
+
+                await client.query(
+                    `
+                    INSERT INTO leave_documents (
+                        leave_request_id,
+                        original_name,
+                        stored_name,
+                        file_path,
+                        mime_type,
+                        file_size
+                    )
+                    VALUES ($1, $2, $3, $4, $5, $6)
+                    `,
+                    [
+                        leaveId,
+                        file.originalname,
+                        file.filename,
+                        file.path,
+                        file.mimetype,
+                        file.size,
+                    ]
+                );
+            }
+        }
+
+        // ========================================
+        // 4. COMMIT DATABASE
         // ========================================
 
         await client.query("COMMIT");
 
-        return leaveRequest;
+        // ========================================
+        // 5. RETURN DATA
+        // ========================================
+
+        return {
+
+            ...leaveRequest,
+
+            oldFilePublicId:
+                file
+                    ? oldFilePublicId
+                    : null,
+
+            oldMimeType:
+                file
+                    ? oldMimeType
+                    : null,
+
+            newFilePublicId:
+                file
+                    ? file.filename
+                    : null,
+
+        };
 
     } catch (error) {
+
+        // ========================================
+        // ROLLBACK
+        // ========================================
 
         await client.query("ROLLBACK");
 
@@ -384,6 +535,48 @@ const updateLeaveRequest = async (
             "Update leave request service error:",
             error
         );
+
+        // ========================================
+        // DELETE NEW FILE IF DATABASE FAILED
+        // ========================================
+
+        if (
+            file &&
+            file.filename
+        ) {
+
+            try {
+
+                let resourceType = "image";
+
+                if (
+                    file.mimetype ===
+                    "application/pdf"
+                ) {
+                    resourceType = "raw";
+                }
+
+                await cloudinary.uploader.destroy(
+                    file.filename,
+                    {
+                        resource_type:
+                            resourceType,
+                    }
+                );
+
+                console.log(
+                    "Deleted NEW Cloudinary file after database failure:",
+                    file.filename
+                );
+
+            } catch (cleanupError) {
+
+                console.error(
+                    "Failed to cleanup NEW Cloudinary file:",
+                    cleanupError.message
+                );
+            }
+        }
 
         throw error;
 

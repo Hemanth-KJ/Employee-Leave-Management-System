@@ -224,10 +224,8 @@ const getMyLeaveRequests = async (
 // UPDATE LEAVE REQUEST
 // ========================================
 
-const updateLeaveRequest = async (
-    req,
-    res
-) => {
+
+const updateLeaveRequest = async (req, res) => {
 
     try {
 
@@ -251,12 +249,9 @@ const updateLeaveRequest = async (
         ) {
 
             return res.status(400).json({
-
                 success: false,
-
                 message:
                     "Reason, start date and end date are required",
-
             });
         }
 
@@ -270,12 +265,9 @@ const updateLeaveRequest = async (
         if (end < start) {
 
             return res.status(400).json({
-
                 success: false,
-
                 message:
                     "End date cannot be before start date",
-
             });
         }
 
@@ -287,6 +279,8 @@ const updateLeaveRequest = async (
 
         // ========================================
         // UPDATE LEAVE
+        //
+        // req.file contains the NEW uploaded file
         // ========================================
 
         const leave =
@@ -295,8 +289,99 @@ const updateLeaveRequest = async (
                 employeeId,
                 reason.trim(),
                 startDate,
-                endDate
+                endDate,
+                req.file
             );
+
+        // ========================================
+        // DELETE OLD CLOUDINARY FILE
+        // ========================================
+
+        if (leave.oldFilePublicId) {
+
+            try {
+
+                console.log(
+                    "========================================"
+                );
+
+                console.log(
+                    "Deleting OLD Cloudinary file:"
+                );
+
+                console.log(
+                    "Old Public ID:",
+                    leave.oldFilePublicId
+                );
+
+                console.log(
+                    "Old MIME type:",
+                    leave.oldMimeType
+                );
+
+                console.log(
+                    "========================================"
+                );
+
+                let resourceType = "image";
+
+                if (
+                    leave.oldMimeType ===
+                    "application/pdf"
+                ) {
+                    resourceType = "raw";
+                }
+
+                const result =
+                    await cloudinary.uploader.destroy(
+                        leave.oldFilePublicId,
+                        {
+                            resource_type:
+                                resourceType,
+                        }
+                    );
+
+                console.log(
+                    "OLD Cloudinary delete result:",
+                    result
+                );
+
+                // ========================================
+                // FALLBACK RESOURCE TYPE
+                // ========================================
+
+                if (
+                    result.result === "not found"
+                ) {
+
+                    const fallbackType =
+                        resourceType === "image"
+                            ? "raw"
+                            : "image";
+
+                    const fallbackResult =
+                        await cloudinary.uploader.destroy(
+                            leave.oldFilePublicId,
+                            {
+                                resource_type:
+                                    fallbackType,
+                            }
+                        );
+
+                    console.log(
+                        "Cloudinary fallback result:",
+                        fallbackResult
+                    );
+                }
+
+            } catch (cloudinaryError) {
+
+                console.error(
+                    "Failed to delete OLD Cloudinary file:",
+                    cloudinaryError.message
+                );
+            }
+        }
 
         // ========================================
         // SUCCESS
@@ -330,17 +415,13 @@ const updateLeaveRequest = async (
         ) {
 
             return res.status(404).json({
-
                 success: false,
-
-                message:
-                    error.message,
-
+                message: error.message,
             });
         }
 
         // ========================================
-        // ONLY PENDING CAN BE UPDATED
+        // ONLY PENDING
         // ========================================
 
         if (
@@ -349,22 +430,19 @@ const updateLeaveRequest = async (
         ) {
 
             return res.status(400).json({
-
                 success: false,
-
-                message:
-                    error.message,
-
+                message: error.message,
             });
         }
 
+        // ========================================
+        // SERVER ERROR
+        // ========================================
+
         return res.status(500).json({
-
             success: false,
-
             message:
                 "Failed to update leave request",
-
         });
     }
 };
