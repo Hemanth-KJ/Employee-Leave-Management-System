@@ -751,7 +751,7 @@ POST /api/auth/login
 ```text
 POST   /api/leaves
 GET    /api/leaves
-GET    /api/leaves/history
+GET    /api/leaves-history
 ```
 
 ## Manager
