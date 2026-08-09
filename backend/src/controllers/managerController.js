@@ -1,6 +1,5 @@
 const pool = require("../config/db");
-const fs = require("fs");
-const path = require("path");
+const cloudinary = require("cloudinary").v2;
 
 // ======================================================
 // GET ALL EMPLOYEES
@@ -38,7 +37,6 @@ const getEmployees = async (req, res) => {
     }
 };
 
-
 // ======================================================
 // DELETE EMPLOYEE
 // ======================================================
@@ -63,19 +61,18 @@ const deleteEmployee = async (req, res) => {
             });
         }
 
-
         // ==================================================
-        // GET EMPLOYEE + DOCUMENT FILES
+        // GET EMPLOYEE
         // ==================================================
 
         const employeeResult = await client.query(
             `
             SELECT
-                id,
-                username,
-                role
-            FROM users
-            WHERE id = $1
+                u.id,
+                u.username,
+                u.role
+            FROM users u
+            WHERE u.id = $1
             `,
             [id]
         );
@@ -89,28 +86,38 @@ const deleteEmployee = async (req, res) => {
 
         const employee = employeeResult.rows[0];
 
-
         // ==================================================
-        // SAFETY CHECK
         // ONLY EMPLOYEES CAN BE DELETED
         // ==================================================
 
         if (employee.role !== "employee") {
             return res.status(403).json({
                 success: false,
-                message: "Only employee accounts can be deleted",
+                message:
+                    "Only employee accounts can be deleted",
             });
         }
 
-
         // ==================================================
-        // GET DOCUMENT FILE PATHS
+        // GET CLOUDINARY DOCUMENTS
+        // ==================================================
+        //
+        // IMPORTANT:
+        // ld.id is used instead of just id.
+        //
+        // This prevents:
+        // "column reference id is ambiguous"
+        //
         // ==================================================
 
         const documentsResult = await client.query(
             `
             SELECT
-                ld.file_path
+                ld.id AS document_id,
+                ld.original_name,
+                ld.stored_name,
+                ld.file_path,
+                ld.mime_type
             FROM leave_documents ld
             INNER JOIN leave_requests lr
                 ON ld.leave_request_id = lr.id
@@ -119,10 +126,31 @@ const deleteEmployee = async (req, res) => {
             [id]
         );
 
-        const filePaths = documentsResult.rows
-            .map((document) => document.file_path)
-            .filter(Boolean);
+        const documents = documentsResult.rows;
 
+        console.log(
+            "========================================"
+        );
+
+        console.log(
+            "Employee:",
+            employee.username
+        );
+
+        console.log(
+            "Documents found:",
+            documents.length
+        );
+
+        console.log(
+            "Cloudinary documents:"
+        );
+
+        console.log(documents);
+
+        console.log(
+            "========================================"
+        );
 
         // ==================================================
         // START TRANSACTION
@@ -130,11 +158,11 @@ const deleteEmployee = async (req, res) => {
 
         await client.query("BEGIN");
 
-
         // ==================================================
         // DELETE EMPLOYEE
+        // ==================================================
         //
-        // PostgreSQL CASCADE automatically deletes:
+        // PostgreSQL CASCADE should delete:
         //
         // users
         //   ↓
@@ -142,9 +170,8 @@ const deleteEmployee = async (req, res) => {
         //   ↓
         // leave_documents
         //
-        // users
-        //   ↓
-        // notifications
+        // and notifications if configured with CASCADE.
+        //
         // ==================================================
 
         const deleteResult = await client.query(
@@ -159,7 +186,6 @@ const deleteEmployee = async (req, res) => {
             [id]
         );
 
-
         if (deleteResult.rows.length === 0) {
             await client.query("ROLLBACK");
 
@@ -169,67 +195,197 @@ const deleteEmployee = async (req, res) => {
             });
         }
 
-
         // ==================================================
-        // COMMIT DATABASE TRANSACTION
+        // COMMIT DATABASE
         // ==================================================
 
         await client.query("COMMIT");
 
-
-        // ==================================================
-        // DELETE PHYSICAL UPLOADED FILES
-        //
-        // Database records have already been deleted.
-        // Missing files are safely ignored.
-        // ==================================================
-
-        const fileDeleteResults = await Promise.allSettled(
-            filePaths.map(async (filePath) => {
-                try {
-                    const absolutePath =
-                        path.resolve(filePath);
-
-                    await fs.promises.unlink(
-                        absolutePath
-                    );
-
-                    return {
-                        success: true,
-                        filePath,
-                    };
-
-                } catch (error) {
-
-                    // File may already have been removed.
-                    if (error.code === "ENOENT") {
-                        return {
-                            success: true,
-                            filePath,
-                        };
-                    }
-
-                    throw error;
-                }
-            })
+        console.log(
+            "Employee deleted from database:",
+            employee.username
         );
 
+        // ==================================================
+        // DELETE CLOUDINARY FILES
+        // ==================================================
+
+        const cloudinaryDeleteResults =
+            await Promise.allSettled(
+                documents
+                    .filter(
+                        (document) =>
+                            document.stored_name
+                    )
+                    .map(async (document) => {
+
+                        const publicId =
+                            document.stored_name;
+
+                        console.log(
+                            "========================================"
+                        );
+
+                        console.log(
+                            "Deleting Cloudinary file:"
+                        );
+
+                        console.log(
+                            "Original name:",
+                            document.original_name
+                        );
+
+                        console.log(
+                            "Public ID:",
+                            publicId
+                        );
+
+                        console.log(
+                            "========================================"
+                        );
+
+                        try {
+
+                            // ==================================================
+                            // TRY RAW
+                            // ==================================================
+
+                            let result =
+                                await cloudinary.uploader.destroy(
+                                    publicId,
+                                    {
+                                        resource_type:
+                                            "raw",
+                                    }
+                                );
+
+                            console.log(
+                                "Cloudinary RAW delete result:",
+                                result
+                            );
+
+                            // ==================================================
+                            // IF NOT FOUND, TRY IMAGE
+                            // ==================================================
+
+                            if (
+                                result.result ===
+                                "not found"
+                            ) {
+
+                                result =
+                                    await cloudinary.uploader.destroy(
+                                        publicId,
+                                        {
+                                            resource_type:
+                                                "image",
+                                        }
+                                    );
+
+                                console.log(
+                                    "Cloudinary IMAGE delete result:",
+                                    result
+                                );
+                            }
+
+                            // ==================================================
+                            // IF STILL NOT FOUND, TRY VIDEO
+                            // ==================================================
+
+                            if (
+                                result.result ===
+                                "not found"
+                            ) {
+
+                                result =
+                                    await cloudinary.uploader.destroy(
+                                        publicId,
+                                        {
+                                            resource_type:
+                                                "video",
+                                        }
+                                    );
+
+                                console.log(
+                                    "Cloudinary VIDEO delete result:",
+                                    result
+                                );
+                            }
+
+                            return {
+                                success: true,
+                                publicId,
+                                result,
+                            };
+
+                        } catch (error) {
+
+                            console.error(
+                                "Cloudinary delete failed:"
+                            );
+
+                            console.error(
+                                "Public ID:",
+                                publicId
+                            );
+
+                            console.error(
+                                error
+                            );
+
+                            throw error;
+                        }
+                    })
+            );
 
         // ==================================================
-        // LOG FILE CLEANUP WARNINGS
+        // LOG CLOUDINARY RESULTS
         // ==================================================
 
-        fileDeleteResults.forEach((result) => {
+        console.log(
+            "========================================"
+        );
 
-            if (result.status === "rejected") {
-                console.warn(
-                    "Failed to delete employee document:",
-                    result.reason
-                );
+        console.log(
+            "CLOUDINARY CLEANUP RESULTS"
+        );
+
+        console.log(
+            "========================================"
+        );
+
+        cloudinaryDeleteResults.forEach(
+            (result) => {
+
+                if (
+                    result.status ===
+                    "fulfilled"
+                ) {
+
+                    console.log(
+                        "Cloudinary cleanup successful:"
+                    );
+
+                    console.log(
+                        result.value
+                    );
+
+                } else {
+
+                    console.warn(
+                        "Cloudinary cleanup failed:"
+                    );
+
+                    console.warn(
+                        result.reason
+                    );
+                }
             }
+        );
 
-        });
-
+        console.log(
+            "========================================"
+        );
 
         // ==================================================
         // SUCCESS
@@ -237,32 +393,37 @@ const deleteEmployee = async (req, res) => {
 
         return res.status(200).json({
             success: true,
+
             message:
                 `Employee "${employee.username}" deleted successfully`,
-            employee: deleteResult.rows[0],
+
+            employee:
+                deleteResult.rows[0],
+
+            documentsDeleted:
+                documents.length,
         });
 
     } catch (error) {
 
         // ==================================================
-        // ROLLBACK IF TRANSACTION IS STILL ACTIVE
+        // ROLLBACK
         // ==================================================
 
         try {
             await client.query("ROLLBACK");
         } catch (rollbackError) {
+
             console.error(
                 "Rollback error:",
                 rollbackError
             );
         }
 
-
         console.error(
             "Delete employee error:",
             error
         );
-
 
         return res.status(500).json({
             success: false,
@@ -276,13 +437,13 @@ const deleteEmployee = async (req, res) => {
     }
 };
 
-
 // ======================================================
 // GET ALL LEAVE REQUESTS
 // ======================================================
 
 const getAllLeaveRequests = async (req, res) => {
     try {
+
         const result = await pool.query(
             `
             SELECT
@@ -322,6 +483,7 @@ const getAllLeaveRequests = async (req, res) => {
         });
 
     } catch (error) {
+
         console.error(
             "Get leave requests error:",
             error
@@ -335,19 +497,24 @@ const getAllLeaveRequests = async (req, res) => {
     }
 };
 
-
 // ======================================================
 // UPDATE LEAVE STATUS
 // ======================================================
 
 const updateLeaveStatus = async (req, res) => {
+
     try {
 
         const { id } = req.params;
 
-        const { status, remarks } =
-            req.body;
+        const {
+            status,
+            remarks,
+        } = req.body;
 
+        // ==================================================
+        // VALIDATE STATUS
+        // ==================================================
 
         if (
             !["approved", "rejected"]
@@ -359,9 +526,11 @@ const updateLeaveStatus = async (req, res) => {
                 message:
                     "Status must be approved or rejected",
             });
-
         }
 
+        // ==================================================
+        // VALIDATE REMARKS
+        // ==================================================
 
         if (
             !remarks ||
@@ -373,38 +542,42 @@ const updateLeaveStatus = async (req, res) => {
                 message:
                     "Remarks are required",
             });
-
         }
 
+        // ==================================================
+        // GET EXISTING LEAVE
+        // ==================================================
 
         const existing =
             await pool.query(
                 `
                 SELECT
-                    id,
-                    employee_id,
-                    status
-                FROM leave_requests
-                WHERE id = $1
+                    lr.id,
+                    lr.employee_id,
+                    lr.status
+                FROM leave_requests lr
+                WHERE lr.id = $1
                 `,
                 [id]
             );
 
-
-        if (existing.rows.length === 0) {
+        if (
+            existing.rows.length === 0
+        ) {
 
             return res.status(404).json({
                 success: false,
                 message:
                     "Leave request not found",
             });
-
         }
-
 
         const leave =
             existing.rows[0];
 
+        // ==================================================
+        // ONLY PENDING LEAVE CAN BE REVIEWED
+        // ==================================================
 
         if (
             leave.status !== "pending"
@@ -415,13 +588,14 @@ const updateLeaveStatus = async (req, res) => {
                 message:
                     "Only pending leave requests can be reviewed",
             });
-
         }
 
+        // ==================================================
+        // START TRANSACTION
+        // ==================================================
 
         const client =
             await pool.connect();
-
 
         try {
 
@@ -429,10 +603,9 @@ const updateLeaveStatus = async (req, res) => {
                 "BEGIN"
             );
 
-
-            // =========================
+            // ==================================================
             // UPDATE LEAVE
-            // =========================
+            // ==================================================
 
             const result =
                 await client.query(
@@ -461,16 +634,14 @@ const updateLeaveStatus = async (req, res) => {
                     ]
                 );
 
-
-            // =========================
+            // ==================================================
             // CREATE NOTIFICATION
-            // =========================
+            // ==================================================
 
             const message =
                 status === "approved"
                     ? "Your leave request has been approved."
                     : "Your leave request has been rejected.";
-
 
             await client.query(
                 `
@@ -491,11 +662,17 @@ const updateLeaveStatus = async (req, res) => {
                 ]
             );
 
+            // ==================================================
+            // COMMIT
+            // ==================================================
 
             await client.query(
                 "COMMIT"
             );
 
+            // ==================================================
+            // SUCCESS
+            // ==================================================
 
             return res.status(200).json({
 
@@ -506,9 +683,7 @@ const updateLeaveStatus = async (req, res) => {
 
                 leaveRequest:
                     result.rows[0],
-
             });
-
 
         } catch (error) {
 
@@ -521,9 +696,7 @@ const updateLeaveStatus = async (req, res) => {
         } finally {
 
             client.release();
-
         }
-
 
     } catch (error) {
 
@@ -532,16 +705,13 @@ const updateLeaveStatus = async (req, res) => {
             error
         );
 
-
         return res.status(500).json({
 
             success: false,
 
             message:
                 "Failed to update leave request",
-
         });
-
     }
 };
 
@@ -550,55 +720,83 @@ const updateLeaveStatus = async (req, res) => {
 // ======================================================
 
 const getDocument = async (req, res) => {
+
     try {
+
         const { id } = req.params;
 
-        const result = await pool.query(
-            `
-            SELECT
-                original_name,
-                file_path,
-                mime_type
-            FROM leave_documents
-            WHERE leave_request_id = $1
-            `,
-            [id]
-        );
+        const result =
+            await pool.query(
+                `
+                SELECT
+                    ld.original_name,
+                    ld.file_path,
+                    ld.mime_type
+                FROM leave_documents ld
+                WHERE ld.leave_request_id = $1
+                `,
+                [id]
+            );
 
-        if (result.rows.length === 0) {
+        if (
+            result.rows.length === 0
+        ) {
+
             return res.status(404).json({
                 success: false,
-                message: "Document not found",
+                message:
+                    "Document not found",
             });
         }
 
-        const document = result.rows[0];
+        const document =
+            result.rows[0];
 
-        // ==============================================
-        // CLOUDINARY FILE
-        // ==============================================
+        // ==================================================
+        // CLOUDINARY URL
+        // ==================================================
 
         if (!document.file_path) {
+
             return res.status(404).json({
                 success: false,
-                message: "Document URL not found",
+                message:
+                    "Document URL not found",
             });
         }
 
-        console.log("========================================");
-        console.log("Opening Cloudinary document:");
-        console.log(document.file_path);
-        console.log("========================================");
+        console.log(
+            "========================================"
+        );
 
-        // ==============================================
+        console.log(
+            "Opening Cloudinary document:"
+        );
+
+        console.log(
+            document.file_path
+        );
+
+        console.log(
+            "========================================"
+        );
+
+        // ==================================================
         // RETURN CLOUDINARY URL
-        // ==============================================
+        // ==================================================
 
         return res.status(200).json({
+
             success: true,
-            originalName: document.original_name,
-            mimeType: document.mime_type,
-            fileUrl: document.file_path,
+
+            originalName:
+                document.original_name,
+
+            mimeType:
+                document.mime_type,
+
+            fileUrl:
+                document.file_path,
         });
 
     } catch (error) {
@@ -615,7 +813,6 @@ const getDocument = async (req, res) => {
         });
     }
 };
-
 
 // ======================================================
 // EXPORT

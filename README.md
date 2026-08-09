@@ -1,8 +1,10 @@
 # Employee Leave Management System
 
-A full-stack **Employee Leave Management System** that allows employees to apply for leaves and track their leave history, while managers can manage employees, review leave requests, approve or reject requests, and manage employee records.
+A full-stack **Employee Leave Management System** that allows employees to apply for leaves and track their leave history, while managers can manage employees, review leave requests, approve or reject requests, delete employee records, and manage supporting documents.
 
 The application uses **role-based authentication and authorization** to provide different functionality for Employees and Managers.
+
+Supporting leave documents are uploaded to **Cloudinary**, while document metadata and Cloudinary URLs are stored in PostgreSQL.
 
 ---
 
@@ -18,6 +20,7 @@ The application uses **role-based authentication and authorization** to provide 
 * Select leave type
 * Specify leave dates
 * Add leave reason
+* Upload supporting documents
 * View leave history
 * Track leave status
 
@@ -36,24 +39,40 @@ The application uses **role-based authentication and authorization** to provide 
 * View employee details
 * Delete employees
 * View all leave requests
+* View supporting leave documents
 * Review employee leave requests
 * Approve leave requests
 * Reject leave requests
-* Add rejection reason
+* Add remarks when reviewing requests
 * Receive notifications
 * Role-based access control
+
+### 📄 Document Management
+
+* Upload leave supporting documents
+* Store uploaded files securely using Cloudinary
+* Store document metadata in PostgreSQL
+* Open uploaded documents from the manager dashboard
+* Automatically clean up Cloudinary documents when:
+
+  * A leave document is deleted
+  * An employee is deleted
+* Prevent orphaned uploaded documents when employee records are removed
 
 ### 🔐 Security Features
 
 * JWT authentication
-* Password hashing
+* Password hashing using bcrypt
 * Protected routes
 * Role-based authorization
 * Manager-only routes
 * Employee-only routes
 * Secure API requests
 * Authentication token validation
-* User identity validation using UUIDs
+* UUID-based user identification
+* Backend request validation
+* CORS protection
+* Environment-based secret configuration
 
 ---
 
@@ -76,25 +95,35 @@ The application uses **role-based authentication and authorization** to provide 
 * JavaScript
 * JWT
 * bcrypt
-* PostgreSQL
 * REST API
+* Multer / file upload handling
 
 ## Database
 
 * PostgreSQL
+* Supabase PostgreSQL
+
+## Cloud Storage
+
+* Cloudinary
+
+Cloudinary is used to store uploaded leave-supporting documents.
+
+The database stores the document metadata and Cloudinary URL/public ID information required to access and clean up uploaded files.
 
 ## Deployment
 
 * Frontend: Vercel
-* Backend: Railway
+* Backend: Render
 * Database: PostgreSQL / Supabase PostgreSQL
+* File Storage: Cloudinary
 
 ---
 
 # 📁 Project Structure
 
 ```text
-Employee Leave Management System/
+Employee-Leave-Management-System/
 │
 ├── frontend/
 │   │
@@ -143,11 +172,14 @@ Employee Leave Management System/
 └── backend/
     │
     ├── src/
+    │   ├── config/
+    │   │   ├── db.js
+    │   │   └── cloudinary.js
+    │   │
     │   ├── controllers/
     │   ├── middleware/
     │   ├── routes/
     │   ├── services/
-    │   ├── db/
     │   └── app.js
     │
     ├── package.json
@@ -160,12 +192,13 @@ Employee Leave Management System/
 
 # ⚙️ Prerequisites
 
-Before running the project, install the following:
+Before running the project locally, install:
 
 * Node.js
 * npm
 * PostgreSQL
 * Git
+* Cloudinary account
 
 Check Node.js:
 
@@ -214,7 +247,7 @@ Both applications must be installed separately.
 
 # 🎨 Frontend Setup
 
-Open a terminal and navigate to the frontend:
+Navigate to the frontend:
 
 ```bash
 cd frontend
@@ -238,7 +271,7 @@ The frontend will normally be available at:
 http://localhost:5173
 ```
 
-The Vite terminal will display the exact URL after starting the application.
+The Vite terminal displays the exact URL after starting the application.
 
 ---
 
@@ -264,7 +297,7 @@ Start the backend:
 npm start
 ```
 
-The backend will run on the port configured in the backend environment variables.
+The backend will run on the port configured in the environment variables.
 
 For example:
 
@@ -284,17 +317,19 @@ Create a `.env` file inside:
 frontend/
 ```
 
-Example:
+For local development:
 
 ```env
 VITE_API_URL=http://localhost:5000/api
 ```
 
-For production, replace the local backend URL with the deployed Railway backend URL:
+For production:
 
 ```env
-VITE_API_URL=https://your-backend.up.railway.app/api
+VITE_API_URL=https://your-backend.onrender.com/api
 ```
+
+> Use the actual Render backend URL in your deployed frontend environment variables.
 
 ---
 
@@ -316,15 +351,104 @@ DATABASE_URL=your_postgresql_connection_string
 JWT_SECRET=your_jwt_secret
 
 CLIENT_URL=http://localhost:5173
+
+CLOUDINARY_CLOUD_NAME=your_cloudinary_cloud_name
+CLOUDINARY_API_KEY=your_cloudinary_api_key
+CLOUDINARY_API_SECRET=your_cloudinary_api_secret
 ```
 
-For production, `CLIENT_URL` should contain the deployed frontend URL:
+For production, update:
 
 ```env
 CLIENT_URL=https://your-frontend.vercel.app
 ```
 
-> Never commit `.env` files to GitHub.
+### Cloudinary Variables
+
+The backend uses the following Cloudinary configuration:
+
+```env
+CLOUDINARY_CLOUD_NAME=your_cloudinary_cloud_name
+CLOUDINARY_API_KEY=your_cloudinary_api_key
+CLOUDINARY_API_SECRET=your_cloudinary_api_secret
+```
+
+These values are obtained from your Cloudinary account.
+
+> Never commit `.env` files or Cloudinary credentials to GitHub.
+
+---
+
+# ☁️ Cloudinary File Storage
+
+The application uses **Cloudinary** for storing supporting documents uploaded by employees when applying for leave.
+
+### Upload Flow
+
+```text
+Employee
+   │
+   │ Upload supporting document
+   ▼
+React Frontend
+   │
+   │ Multipart/Form-Data
+   ▼
+Node.js + Express
+   │
+   ▼
+Cloudinary
+   │
+   │ Cloudinary URL
+   ▼
+PostgreSQL
+   │
+   └── Document metadata + URL
+```
+
+The application stores information such as:
+
+```text
+original_name
+stored_name / public_id
+file_path
+mime_type
+file_size
+leave_request_id
+```
+
+The actual uploaded document is stored in Cloudinary.
+
+PostgreSQL stores the information required to retrieve the document.
+
+---
+
+# 🗑️ Cloudinary Cleanup
+
+The application also handles document cleanup.
+
+When a manager deletes an employee:
+
+```text
+Manager
+   │
+   ▼
+Delete Employee
+   │
+   ├── Delete employee from PostgreSQL
+   │
+   ├── CASCADE deletes leave requests
+   │
+   ├── CASCADE deletes leave documents
+   │
+   └── Delete corresponding Cloudinary files
+```
+
+The backend retrieves the Cloudinary public IDs associated with the employee's leave documents before deleting the database records.
+
+Cloudinary files are then deleted using the Cloudinary API.
+
+This prevents unnecessary files from remaining in Cloudinary after an employee has been removed.
 
 ---
 
@@ -332,7 +456,7 @@ CLIENT_URL=https://your-frontend.vercel.app
 
 This project uses PostgreSQL.
 
-Create a PostgreSQL database and configure the connection string in the backend `.env` file.
+Create a PostgreSQL database and configure the connection string in the backend `.env`.
 
 Example:
 
@@ -340,11 +464,18 @@ Example:
 DATABASE_URL=postgresql://username:password@host:port/database
 ```
 
-The database contains tables for users, leave requests, and notifications.
+The database contains tables for:
 
-The `users` table uses a UUID `id` to identify users.
+```text
+users
+leave_requests
+leave_documents
+notifications
+```
 
-The application uses the user's UUID consistently when creating relationships and notifications.
+The `users` table uses UUID values to identify users.
+
+Relationships between users, leave requests, documents, and notifications use these UUIDs.
 
 ---
 
@@ -364,6 +495,8 @@ Login
 Employee Dashboard
    ↓
 Apply for Leave
+   ↓
+Upload Supporting Document
    ↓
 Track Leave Status
    ↓
@@ -385,7 +518,11 @@ Manage Employees
    ↓
 View Leave Requests
    ↓
+View Supporting Documents
+   ↓
 Approve / Reject Leave
+   ↓
+Delete Employees
 ```
 
 ---
@@ -428,9 +565,11 @@ Employee → Employee Dashboard
 Manager  → Manager Dashboard
 ```
 
-Employees cannot access manager-only pages.
+Employees cannot access manager-only APIs.
 
 Managers cannot access employee-only functionality unless explicitly allowed by the application.
+
+Backend middleware is responsible for enforcing authorization.
 
 ---
 
@@ -445,6 +584,7 @@ Leave Type
 Start Date
 End Date
 Reason
+Supporting Document
 ```
 
 The request is stored in PostgreSQL with:
@@ -452,6 +592,10 @@ The request is stored in PostgreSQL with:
 ```text
 status = pending
 ```
+
+If a supporting document is uploaded, it is stored in Cloudinary.
+
+---
 
 ### 2. Manager reviews the request
 
@@ -469,15 +613,19 @@ The manager can:
 Approve
 ```
 
-or
+or:
 
 ```text
 Reject
 ```
 
+The manager can also provide remarks.
+
+---
+
 ### 3. Employee receives the result
 
-The employee can view the updated status:
+The employee can view:
 
 ```text
 Pending
@@ -485,7 +633,7 @@ Approved
 Rejected
 ```
 
-Notifications are also generated when appropriate.
+Notifications are generated when the manager approves or rejects the leave request.
 
 ---
 
@@ -498,7 +646,6 @@ Notifications can be generated for events such as:
 * Leave application
 * Leave approval
 * Leave rejection
-* Manager notifications
 * Employee-related actions
 
 The frontend contains:
@@ -526,86 +673,102 @@ The manager can view employee information and delete employees when required.
 
 Employee deletion is protected by manager authorization.
 
+When an employee is deleted:
+
+```text
+Employee
+   ↓
+Leave Requests
+   ↓
+Leave Documents
+   ↓
+Cloudinary Files
+```
+
+The corresponding database records and Cloudinary files are cleaned up.
+
 ---
 
-# 🧩 Backend Service Architecture
+# 🧩 Backend Architecture
 
-The backend follows a modular structure separating different responsibilities.
-
-Typical structure:
+The backend follows a modular architecture separating different responsibilities.
 
 ```text
 Routes
+   ↓
+Middleware
    ↓
 Controllers
    ↓
 Services
    ↓
-Database
+Database / Cloudinary
 ```
 
-For example:
+### Routes
 
-```text
-leaveService.js
-```
+Routes define the API endpoints.
 
-handles leave-related business logic.
+### Middleware
 
-The leave service uses the existing `username` column from the `users` table rather than relying on a non-existent `email` column.
+Middleware handles:
 
-The employee identity is obtained using the user's UUID:
+* JWT authentication
+* Role authorization
+* Request validation
 
-```text
-users.id
-```
+### Controllers
 
-The manager's JWT:
+Controllers handle incoming requests and responses.
 
-```text
-req.user.id
-```
+### Services
 
-must correspond to the correct UUID from the `users` table.
+Services contain reusable business logic.
 
-This ensures that notification records use valid UUID values.
+### PostgreSQL
+
+PostgreSQL stores application data.
+
+### Cloudinary
+
+Cloudinary stores uploaded supporting documents.
 
 ---
 
 # 🌐 API
 
-The backend exposes REST API endpoints for:
+The backend exposes REST API endpoints for authentication, leave management, manager operations, and notifications.
 
-### Authentication
+## Authentication
 
 ```text
 POST /api/auth/register
 POST /api/auth/login
 ```
 
-### Leave Management
+## Employee Leave Management
 
 ```text
 POST   /api/leaves
 GET    /api/leaves
 GET    /api/leaves/history
-PUT    /api/leaves/:id/approve
-PUT    /api/leaves/:id/reject
 ```
 
-### Manager
+## Manager
 
 ```text
 GET    /api/manager/employees
 DELETE /api/manager/employees/:id
 GET    /api/manager/leaves
+GET    /api/manager/leaves/:id/document
+PATCH  /api/manager/leaves/:id/status
 ```
 
-### Notifications
+## Notifications
 
 ```text
-GET    /api/notifications
-PUT    /api/notifications/:id/read
+GET /api/notifications
+PUT /api/notifications/:id/read
 ```
 
 > The exact API paths depend on the routes configured in the current backend implementation.
@@ -634,7 +797,7 @@ npm install
 npm run dev
 ```
 
-Then open the frontend URL displayed by Vite, usually:
+Then open the frontend URL displayed by Vite:
 
 ```text
 http://localhost:5173
@@ -665,12 +828,13 @@ The `dist` directory contains the production-ready frontend.
 
 ## Frontend — Vercel
 
-The React/Vite frontend can be deployed to Vercel.
+The React/Vite frontend is deployed using Vercel.
 
 Recommended settings:
 
 ```text
-Framework: Vite
+Framework:
+Vite
 
 Build Command:
 npm run build
@@ -679,70 +843,162 @@ Output Directory:
 dist
 ```
 
-Add the production API URL as a Vercel environment variable:
+Add the production backend URL as a Vercel environment variable:
 
 ```text
-VITE_API_URL=https://your-backend.up.railway.app/api
+VITE_API_URL=https://your-backend.onrender.com/api
 ```
+
+After changing environment variables, redeploy the frontend.
 
 ---
 
-## Backend — Railway
+# 🚀 Backend — Render
 
-The Node.js/Express backend can be deployed to Railway.
+The Node.js/Express backend is deployed using Render.
 
-Configure the required environment variables:
+The Render service runs the backend application and exposes a public HTTPS URL.
+
+Example:
+
+```text
+https://your-backend.onrender.com
+```
+
+Configure the following environment variables in Render:
 
 ```env
 PORT=5000
+
 DATABASE_URL=your_postgresql_connection_string
+
 JWT_SECRET=your_jwt_secret
+
 CLIENT_URL=https://your-frontend.vercel.app
+
+CLOUDINARY_CLOUD_NAME=your_cloudinary_cloud_name
+
+CLOUDINARY_API_KEY=your_cloudinary_api_key
+
+CLOUDINARY_API_SECRET=your_cloudinary_api_secret
 ```
 
-Railway provides a public backend URL such as:
-
-```text
-https://your-backend.up.railway.app
-```
-
-Use this URL in the frontend's:
+The frontend uses the Render backend URL:
 
 ```env
-VITE_API_URL
+VITE_API_URL=https://your-backend.onrender.com/api
+```
+
+> Render manages the production backend process, while Cloudinary handles uploaded document storage.
+
+---
+
+# ☁️ Cloudinary Configuration
+
+Create a Cloudinary account and obtain:
+
+```text
+Cloud Name
+API Key
+API Secret
+```
+
+Configure them in the backend environment:
+
+```env
+CLOUDINARY_CLOUD_NAME=...
+CLOUDINARY_API_KEY=...
+CLOUDINARY_API_SECRET=...
+```
+
+The backend Cloudinary configuration is responsible for connecting the application to Cloudinary.
+
+Example configuration:
+
+```javascript
+const cloudinary = require("cloudinary").v2;
+
+cloudinary.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET,
+});
+
+module.exports = cloudinary;
 ```
 
 ---
 
 # 🔄 Production Architecture
 
-After deployment, the application architecture will look like:
+After deployment, the application architecture looks like:
 
 ```text
-                   ┌─────────────────────┐
-                   │       User          │
-                   │      Browser        │
-                   └──────────┬──────────┘
-                              │
-                              ▼
-                   ┌─────────────────────┐
-                   │       Vercel        │
-                   │   React + Vite      │
-                   └──────────┬──────────┘
-                              │
-                              │ HTTPS REST API
-                              ▼
-                   ┌─────────────────────┐
-                   │      Railway        │
-                   │ Node.js + Express   │
-                   └──────────┬──────────┘
-                              │
-                              │ PostgreSQL
-                              ▼
-                   ┌─────────────────────┐
-                   │     PostgreSQL      │
-                   │      Database       │
-                   └─────────────────────┘
+                         ┌─────────────────────┐
+                         │        User         │
+                         │      Browser        │
+                         └──────────┬──────────┘
+                                    │
+                                    │ HTTPS
+                                    ▼
+                         ┌─────────────────────┐
+                         │       Vercel        │
+                         │    React + Vite     │
+                         └──────────┬──────────┘
+                                    │
+                                    │ REST API
+                                    │ HTTPS
+                                    ▼
+                         ┌─────────────────────┐
+                         │       Render        │
+                         │  Node.js + Express  │
+                         └──────┬─────────┬────┘
+                                │         │
+                    PostgreSQL  │         │ Cloudinary API
+                                │         │
+                                ▼         ▼
+                    ┌───────────────┐  ┌───────────────┐
+                    │  PostgreSQL   │  │   Cloudinary  │
+                    │    Database   │  │ File Storage  │
+                    └───────────────┘  └───────────────┘
+```
+
+### Responsibilities
+
+**Vercel**
+
+```text
+React frontend
+Static assets
+Production frontend
+```
+
+**Render**
+
+```text
+Node.js
+Express
+REST API
+JWT authentication
+Business logic
+```
+
+**PostgreSQL**
+
+```text
+Users
+Leave requests
+Notifications
+Document metadata
+```
+
+**Cloudinary**
+
+```text
+Uploaded supporting documents
+Document storage
+Document retrieval
+Document deletion
 ```
 
 ---
@@ -759,7 +1015,11 @@ For production deployments:
 * Validate user roles on the backend.
 * Validate request data.
 * Keep database credentials private.
-* Do not store sensitive credentials directly in source code.
+* Keep Cloudinary API credentials private.
+* Never expose `CLOUDINARY_API_SECRET` to the frontend.
+* Use environment variables for production secrets.
+* Validate uploaded files.
+* Restrict manager-only operations on the backend.
 
 ---
 
@@ -770,11 +1030,17 @@ The project should ignore:
 ```gitignore
 node_modules/
 dist/
+
 .env
 .env.local
 .env.production
+
 *.log
+
+uploads/
 ```
+
+> Uploaded documents are stored in Cloudinary, so local uploaded files should not be committed to GitHub.
 
 ---
 
@@ -832,6 +1098,58 @@ Make sure:
 
 ---
 
+## Cloudinary upload error
+
+Check:
+
+```env
+CLOUDINARY_CLOUD_NAME=...
+CLOUDINARY_API_KEY=...
+CLOUDINARY_API_SECRET=...
+```
+
+Make sure the Cloudinary credentials are correctly configured in the backend.
+
+---
+
+## Cloudinary document does not open
+
+Check that:
+
+```text
+file_path
+```
+
+contains the correct Cloudinary URL.
+
+Also verify that the corresponding file still exists in Cloudinary.
+
+---
+
+## Employee deletion does not remove Cloudinary files
+
+Verify that the database stores the Cloudinary public ID in:
+
+```text
+stored_name
+```
+
+The backend uses this value to delete the Cloudinary resource.
+
+Also check the backend logs for:
+
+```text
+Cloudinary cleanup successful
+```
+
+or:
+
+```text
+Cloudinary cleanup failed
+```
+
+---
+
 ## CORS error
 
 Make sure the backend allows the frontend origin.
@@ -848,27 +1166,37 @@ For production:
 https://your-frontend.vercel.app
 ```
 
+Configure:
+
+```env
+CLIENT_URL=https://your-frontend.vercel.app
+```
+
 ---
 
 ## API requests fail after Vercel deployment
 
-Check:
+Check the Vercel environment variable:
 
-```env
+```text
 VITE_API_URL
 ```
 
-The frontend must use the deployed Railway backend URL instead of:
+It must point to the Render backend.
 
-```text
-localhost
-```
-
-For example:
+Example:
 
 ```env
-VITE_API_URL=https://your-backend.up.railway.app/api
+VITE_API_URL=https://your-backend.onrender.com/api
 ```
+
+Do not use:
+
+```text
+http://localhost:5000
+```
+
+in the production frontend.
 
 ---
 
@@ -925,8 +1253,13 @@ The main objective of this project is to build a practical full-stack leave mana
 * CRUD operations
 * Leave approval workflows
 * Notification systems
+* File upload handling
+* Cloudinary cloud storage
+* Cloudinary file cleanup
 * Secure API communication
 * Cloud deployment
+* Vercel frontend deployment
+* Render backend deployment
 
 ---
 
@@ -950,7 +1283,8 @@ Docker
 Git
 GitHub
 Vercel
-Railway
+Render
+Cloudinary
 ```
 
 ---
