@@ -1,14 +1,36 @@
 import api from "./api";
 
+
 export const getEmployees = async () => {
-    const response = await api.get("/manager/employees");
+    const response = await api.get(
+        "/manager/employees"
+    );
+
     return response.data;
 };
 
-export const getAllLeaves = async () => {
-    const response = await api.get("/manager/leaves");
+
+// ======================================================
+// DELETE EMPLOYEE
+// ======================================================
+
+export const deleteEmployee = async (id) => {
+    const response = await api.delete(
+        `/manager/employees/${id}`
+    );
+
     return response.data;
 };
+
+
+export const getAllLeaves = async () => {
+    const response = await api.get(
+        "/manager/leaves"
+    );
+
+    return response.data;
+};
+
 
 export const updateLeaveStatus = async (
     id,
@@ -26,7 +48,10 @@ export const updateLeaveStatus = async (
     return response.data;
 };
 
-export const getLeaveDocument = async (leaveId) => {
+
+export const getLeaveDocument = async (
+    leaveId
+) => {
     const response = await api.get(
         `/manager/leaves/${leaveId}/document`,
         {

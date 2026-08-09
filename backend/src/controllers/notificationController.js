@@ -1,19 +1,13 @@
-const pool = require("../config/db");
+const db = require("../config/db");
 
-// ==========================================
-// GET LOGGED-IN USER NOTIFICATIONS
-// ==========================================
+// Get current user's notifications
 const getMyNotifications = async (req, res) => {
     try {
         const userId = req.user.id;
 
-        const result = await pool.query(
+        const result = await db.query(
             `
-            SELECT
-                id,
-                message,
-                is_read,
-                created_at
+            SELECT *
             FROM notifications
             WHERE user_id = $1
             ORDER BY created_at DESC
@@ -21,112 +15,112 @@ const getMyNotifications = async (req, res) => {
             [userId]
         );
 
-        return res.status(200).json({
-            success: true,
+        res.status(200).json({
             notifications: result.rows,
         });
-
     } catch (error) {
         console.error(
             "Get notifications error:",
             error
         );
 
-        return res.status(500).json({
-            success: false,
-            message: "Failed to retrieve notifications",
+        res.status(500).json({
+            message: "Failed to fetch notifications",
         });
     }
 };
 
-
-// ==========================================
-// MARK ONE NOTIFICATION AS READ
-// ==========================================
+// Mark one notification as read
 const markAsRead = async (req, res) => {
     try {
         const userId = req.user.id;
-        const { id } = req.params;
+        const notificationId = req.params.id;
 
-        const result = await pool.query(
+        await db.query(
             `
             UPDATE notifications
-            SET is_read = TRUE
+            SET is_read = true
             WHERE id = $1
             AND user_id = $2
-            RETURNING
-                id,
-                message,
-                is_read,
-                created_at
             `,
-            [id, userId]
+            [notificationId, userId]
         );
 
-        if (result.rows.length === 0) {
-            return res.status(404).json({
-                success: false,
-                message: "Notification not found",
-            });
-        }
-
-        return res.status(200).json({
-            success: true,
-            notification: result.rows[0],
+        res.status(200).json({
+            message: "Notification marked as read",
         });
-
     } catch (error) {
         console.error(
-            "Mark notification read error:",
+            "Mark notification as read error:",
             error
         );
 
-        return res.status(500).json({
-            success: false,
+        res.status(500).json({
             message: "Failed to mark notification as read",
         });
     }
 };
 
-
-// ==========================================
-// MARK ALL NOTIFICATIONS AS READ
-// ==========================================
+// Mark all notifications as read
 const markAllAsRead = async (req, res) => {
     try {
         const userId = req.user.id;
 
-        await pool.query(
+        await db.query(
             `
             UPDATE notifications
-            SET is_read = TRUE
+            SET is_read = true
             WHERE user_id = $1
-            AND is_read = FALSE
             `,
             [userId]
         );
 
-        return res.status(200).json({
-            success: true,
+        res.status(200).json({
             message: "All notifications marked as read",
         });
-
     } catch (error) {
         console.error(
             "Mark all notifications error:",
             error
         );
 
-        return res.status(500).json({
-            success: false,
+        res.status(500).json({
             message: "Failed to mark notifications as read",
         });
     }
 };
 
+// Delete all notifications
+const deleteAllNotifications = async (req, res) => {
+    try {
+        const userId = req.user.id;
+
+        await db.query(
+            `
+            DELETE FROM notifications
+            WHERE user_id = $1
+            `,
+            [userId]
+        );
+
+        res.status(200).json({
+            message: "All notifications deleted successfully",
+        });
+    } catch (error) {
+        console.error(
+            "Delete all notifications error:",
+            error
+        );
+
+        res.status(500).json({
+            message: "Failed to delete notifications",
+        });
+    }
+};
 
 module.exports = {
     getMyNotifications,
     markAsRead,
     markAllAsRead,
+    deleteAllNotifications,
 };

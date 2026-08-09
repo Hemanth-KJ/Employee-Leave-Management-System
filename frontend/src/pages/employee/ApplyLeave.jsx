@@ -12,8 +12,6 @@ import {
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 
-import ThemeToggle from "../../components/ThemeToggle";
-
 import { applyLeave } from "../../services/leaveService";
 
 const ApplyLeave = () => {
@@ -164,7 +162,6 @@ const ApplyLeave = () => {
                     "/employee/leave-history"
                 );
             }, 1200);
-
         } catch (error) {
             console.error(
                 "Apply leave error:",
@@ -214,18 +211,10 @@ const ApplyLeave = () => {
                                 Apply for Leave
                             </h1>
 
-                            <p className="text-xs text-slate-500">
+                            <p className="text-xs text-slate-500 dark:text-slate-400">
                                 Submit a new leave request
                             </p>
                         </div>
-
-                    </div>
-
-                    {/* RIGHT */}
-
-                    <div className="flex items-center gap-3">
-
-                        <ThemeToggle />
 
                     </div>
 

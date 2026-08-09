@@ -1,32 +1,31 @@
 import api from "./api";
 
-
-// ==========================================
-// GET NOTIFICATIONS
-// ==========================================
-
 export const getNotifications = async () => {
-
-    const response =
-        await api.get(
-            "/notifications"
-        );
+    const response = await api.get("/notifications");
 
     return response.data;
 };
 
+export const markNotificationAsRead = async (id) => {
+    const response = await api.patch(
+        `/notifications/${id}/read`
+    );
 
-// ==========================================
-// MARK ONE AS READ
-// ==========================================
+    return response.data;
+};
 
-export const markNotificationAsRead =
-    async (id) => {
+export const markAllNotificationsAsRead = async () => {
+    const response = await api.patch(
+        "/notifications/read-all"
+    );
 
-        const response =
-            await api.patch(
-                `/notifications/${id}/read`
-            );
+    return response.data;
+};
 
-        return response.data;
-    };
+export const deleteAllNotifications = async () => {
+    const response = await api.delete(
+        "/notifications"
+    );
+
+    return response.data;
+};

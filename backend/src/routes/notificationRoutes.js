@@ -1,17 +1,12 @@
 const express = require("express");
 
-const notificationController =
-    require("../controllers/notificationController");
-
-const authenticateToken =
-    require("../middleware/authMiddleware");
+const notificationController = require("../controllers/notificationController");
+const authenticateToken = require("../middleware/authMiddleware");
 
 const router = express.Router();
 
-
-// All notification endpoints require authentication
+// All notification routes require authentication
 router.use(authenticateToken);
-
 
 // GET /api/notifications
 router.get(
@@ -19,13 +14,11 @@ router.get(
     notificationController.getMyNotifications
 );
 
-
 // PATCH /api/notifications/:id/read
 router.patch(
     "/:id/read",
     notificationController.markAsRead
 );
-
 
 // PATCH /api/notifications/read-all
 router.patch(
@@ -33,5 +26,10 @@ router.patch(
     notificationController.markAllAsRead
 );
 
+// DELETE /api/notifications
+router.delete(
+    "/",
+    notificationController.deleteAllNotifications
+);
 
 module.exports = router;

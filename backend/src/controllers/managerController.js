@@ -2,7 +2,6 @@ const pool = require("../config/db");
 const fs = require("fs");
 const path = require("path");
 
-
 // ======================================================
 // GET ALL EMPLOYEES
 // ======================================================
@@ -36,6 +35,244 @@ const getEmployees = async (req, res) => {
             success: false,
             message: "Failed to retrieve employees",
         });
+    }
+};
+
+
+// ======================================================
+// DELETE EMPLOYEE
+// ======================================================
+
+const deleteEmployee = async (req, res) => {
+    const client = await pool.connect();
+
+    try {
+        const { id } = req.params;
+
+        // ==================================================
+        // VALIDATE UUID
+        // ==================================================
+
+        const uuidRegex =
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+        if (!uuidRegex.test(id)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid employee ID",
+            });
+        }
+
+
+        // ==================================================
+        // GET EMPLOYEE + DOCUMENT FILES
+        // ==================================================
+
+        const employeeResult = await client.query(
+            `
+            SELECT
+                id,
+                username,
+                role
+            FROM users
+            WHERE id = $1
+            `,
+            [id]
+        );
+
+        if (employeeResult.rows.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: "Employee not found",
+            });
+        }
+
+        const employee = employeeResult.rows[0];
+
+
+        // ==================================================
+        // SAFETY CHECK
+        // ONLY EMPLOYEES CAN BE DELETED
+        // ==================================================
+
+        if (employee.role !== "employee") {
+            return res.status(403).json({
+                success: false,
+                message: "Only employee accounts can be deleted",
+            });
+        }
+
+
+        // ==================================================
+        // GET DOCUMENT FILE PATHS
+        // ==================================================
+
+        const documentsResult = await client.query(
+            `
+            SELECT
+                ld.file_path
+            FROM leave_documents ld
+            INNER JOIN leave_requests lr
+                ON ld.leave_request_id = lr.id
+            WHERE lr.employee_id = $1
+            `,
+            [id]
+        );
+
+        const filePaths = documentsResult.rows
+            .map((document) => document.file_path)
+            .filter(Boolean);
+
+
+        // ==================================================
+        // START TRANSACTION
+        // ==================================================
+
+        await client.query("BEGIN");
+
+
+        // ==================================================
+        // DELETE EMPLOYEE
+        //
+        // PostgreSQL CASCADE automatically deletes:
+        //
+        // users
+        //   ↓
+        // leave_requests
+        //   ↓
+        // leave_documents
+        //
+        // users
+        //   ↓
+        // notifications
+        // ==================================================
+
+        const deleteResult = await client.query(
+            `
+            DELETE FROM users
+            WHERE id = $1
+              AND role = 'employee'
+            RETURNING
+                id,
+                username
+            `,
+            [id]
+        );
+
+
+        if (deleteResult.rows.length === 0) {
+            await client.query("ROLLBACK");
+
+            return res.status(404).json({
+                success: false,
+                message: "Employee not found",
+            });
+        }
+
+
+        // ==================================================
+        // COMMIT DATABASE TRANSACTION
+        // ==================================================
+
+        await client.query("COMMIT");
+
+
+        // ==================================================
+        // DELETE PHYSICAL UPLOADED FILES
+        //
+        // Database records have already been deleted.
+        // Missing files are safely ignored.
+        // ==================================================
+
+        const fileDeleteResults = await Promise.allSettled(
+            filePaths.map(async (filePath) => {
+                try {
+                    const absolutePath =
+                        path.resolve(filePath);
+
+                    await fs.promises.unlink(
+                        absolutePath
+                    );
+
+                    return {
+                        success: true,
+                        filePath,
+                    };
+
+                } catch (error) {
+
+                    // File may already have been removed.
+                    if (error.code === "ENOENT") {
+                        return {
+                            success: true,
+                            filePath,
+                        };
+                    }
+
+                    throw error;
+                }
+            })
+        );
+
+
+        // ==================================================
+        // LOG FILE CLEANUP WARNINGS
+        // ==================================================
+
+        fileDeleteResults.forEach((result) => {
+
+            if (result.status === "rejected") {
+                console.warn(
+                    "Failed to delete employee document:",
+                    result.reason
+                );
+            }
+
+        });
+
+
+        // ==================================================
+        // SUCCESS
+        // ==================================================
+
+        return res.status(200).json({
+            success: true,
+            message:
+                `Employee "${employee.username}" deleted successfully`,
+            employee: deleteResult.rows[0],
+        });
+
+    } catch (error) {
+
+        // ==================================================
+        // ROLLBACK IF TRANSACTION IS STILL ACTIVE
+        // ==================================================
+
+        try {
+            await client.query("ROLLBACK");
+        } catch (rollbackError) {
+            console.error(
+                "Rollback error:",
+                rollbackError
+            );
+        }
+
+
+        console.error(
+            "Delete employee error:",
+            error
+        );
+
+
+        return res.status(500).json({
+            success: false,
+            message:
+                "Failed to delete employee",
+        });
+
+    } finally {
+
+        client.release();
     }
 };
 
@@ -92,7 +329,8 @@ const getAllLeaveRequests = async (req, res) => {
 
         return res.status(500).json({
             success: false,
-            message: "Failed to retrieve leave requests",
+            message:
+                "Failed to retrieve leave requests",
         });
     }
 };
@@ -103,7 +341,6 @@ const getAllLeaveRequests = async (req, res) => {
 // ======================================================
 
 const updateLeaveStatus = async (req, res) => {
-
     try {
 
         const { id } = req.params;
@@ -406,6 +643,7 @@ const getDocument = async (req, res) => {
 
 module.exports = {
     getEmployees,
+    deleteEmployee,
     getAllLeaveRequests,
     updateLeaveStatus,
     getDocument,

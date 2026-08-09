@@ -78,7 +78,7 @@ const App = () => {
                 </Route>
 
 
-                {/* Manager routes will be added next */}
+                {/* Manager routes  */}
               <Route element={<RoleRoute allowedRole="manager" />}>
 
                        <Route

@@ -21,45 +21,59 @@ import {
 import { logout } from "../../services/authService";
 
 import ThemeToggle from "../../components/ThemeToggle";
+import NotificationDropdown from "../../components/NotificationDropdown";
 
 const ManagerDashboard = () => {
     const navigate = useNavigate();
 
+    // ========================================
+    // STATE
+    // ========================================
+
     const [employees, setEmployees] = useState([]);
     const [leaves, setLeaves] = useState([]);
+
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
 
     const username =
         localStorage.getItem("username") || "Manager";
 
-    /*
-     * Initial dashboard loading
-     */
+    // ========================================
+    // FETCH DASHBOARD DATA
+    // ========================================
+
     useEffect(() => {
         let cancelled = false;
 
         const fetchDashboard = async () => {
             try {
-                const [employeeData, leaveData] =
-                    await Promise.all([
-                        getEmployees(),
-                        getAllLeaves(),
-                    ]);
+                setLoading(true);
+                setError("");
 
-                if (cancelled) return;
+                const [
+                    employeeData,
+                    leaveData,
+                ] = await Promise.all([
+                    getEmployees(),
+                    getAllLeaves(),
+                ]);
+
+                if (cancelled) {
+                    return;
+                }
 
                 setEmployees(
-                    employeeData.employees || []
+                    employeeData?.employees || []
                 );
 
                 setLeaves(
-                    leaveData.leaveRequests || []
+                    leaveData?.leaveRequests || []
                 );
-
-                setError("");
             } catch (error) {
-                if (cancelled) return;
+                if (cancelled) {
+                    return;
+                }
 
                 console.error(
                     "Manager dashboard error:",
@@ -84,30 +98,33 @@ const ManagerDashboard = () => {
         };
     }, []);
 
-    /*
-     * Manual refresh
-     */
+    // ========================================
+    // MANUAL REFRESH
+    // ========================================
+
     const loadDashboard = async () => {
         try {
             setLoading(true);
             setError("");
 
-            const [employeeData, leaveData] =
-                await Promise.all([
-                    getEmployees(),
-                    getAllLeaves(),
-                ]);
+            const [
+                employeeData,
+                leaveData,
+            ] = await Promise.all([
+                getEmployees(),
+                getAllLeaves(),
+            ]);
 
             setEmployees(
-                employeeData.employees || []
+                employeeData?.employees || []
             );
 
             setLeaves(
-                leaveData.leaveRequests || []
+                leaveData?.leaveRequests || []
             );
         } catch (error) {
             console.error(
-                "Manager dashboard error:",
+                "Manager dashboard refresh error:",
                 error
             );
 
@@ -120,22 +137,37 @@ const ManagerDashboard = () => {
         }
     };
 
+    // ========================================
+    // LOGOUT
+    // ========================================
+
     const handleLogout = () => {
         logout();
         navigate("/login");
     };
 
+    // ========================================
+    // STATISTICS
+    // ========================================
+
     const pendingCount = leaves.filter(
-        (leave) => leave.status === "pending"
+        (leave) =>
+            leave.status === "pending"
     ).length;
 
     const approvedCount = leaves.filter(
-        (leave) => leave.status === "approved"
+        (leave) =>
+            leave.status === "approved"
     ).length;
 
     const rejectedCount = leaves.filter(
-        (leave) => leave.status === "rejected"
+        (leave) =>
+            leave.status === "rejected"
     ).length;
+
+    // ========================================
+    // RENDER
+    // ========================================
 
     return (
         <div
@@ -168,12 +200,22 @@ const ManagerDashboard = () => {
                     dark:bg-slate-950/80
                 "
             >
-                <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
-
+                <div
+                    className="
+                        mx-auto
+                        flex
+                        max-w-7xl
+                        items-center
+                        justify-between
+                        px-4
+                        py-4
+                        sm:px-6
+                        lg:px-8
+                    "
+                >
                     {/* BRAND */}
 
                     <div className="flex items-center gap-3">
-
                         <div
                             className="
                                 flex
@@ -193,20 +235,40 @@ const ManagerDashboard = () => {
                         </div>
 
                         <div>
-                            <p className="font-semibold text-slate-900 dark:text-white">
+                            <p
+                                className="
+                                    font-semibold
+                                    text-slate-900
+                                    dark:text-white
+                                "
+                            >
                                 Employee Leave
                             </p>
 
-                            <p className="text-xs text-slate-500 dark:text-slate-500">
+                            <p
+                                className="
+                                    text-xs
+                                    text-slate-500
+                                "
+                            >
                                 Manager Portal
                             </p>
                         </div>
-
                     </div>
 
                     {/* RIGHT SIDE */}
 
-                    <div className="flex items-center gap-2 sm:gap-4">
+                    <div
+                        className="
+                            flex
+                            items-center
+                            gap-2
+                            sm:gap-4
+                        "
+                    >
+                        {/* NOTIFICATIONS */}
+
+                        <NotificationDropdown />
 
                         {/* THEME */}
 
@@ -214,8 +276,14 @@ const ManagerDashboard = () => {
 
                         {/* USER */}
 
-                        <div className="hidden items-center gap-3 sm:flex">
-
+                        <div
+                            className="
+                                hidden
+                                items-center
+                                gap-3
+                                sm:flex
+                            "
+                        >
                             <div
                                 className="
                                     flex
@@ -226,7 +294,6 @@ const ManagerDashboard = () => {
                                     rounded-full
                                     bg-blue-500/10
                                     text-blue-600
-
                                     dark:text-blue-400
                                 "
                             >
@@ -234,15 +301,26 @@ const ManagerDashboard = () => {
                             </div>
 
                             <div>
-                                <p className="text-sm font-medium text-slate-800 dark:text-white">
+                                <p
+                                    className="
+                                        text-sm
+                                        font-medium
+                                        text-slate-800
+                                        dark:text-white
+                                    "
+                                >
                                     {username}
                                 </p>
 
-                                <p className="text-xs text-slate-500">
+                                <p
+                                    className="
+                                        text-xs
+                                        text-slate-500
+                                    "
+                                >
                                     Manager
                                 </p>
                             </div>
-
                         </div>
 
                         {/* LOGOUT */}
@@ -281,9 +359,7 @@ const ManagerDashboard = () => {
                                 Logout
                             </span>
                         </button>
-
                     </div>
-
                 </div>
             </header>
 
@@ -291,10 +367,19 @@ const ManagerDashboard = () => {
                 MAIN
             ========================================= */}
 
-            <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 lg:py-10">
-
+            <main
+                className="
+                    mx-auto
+                    max-w-7xl
+                    px-4
+                    py-8
+                    sm:px-6
+                    lg:px-8
+                    lg:py-10
+                "
+            >
                 {/* =========================================
-                    PAGE HEADING
+                    HERO / PAGE HEADING
                 ========================================= */}
 
                 <section
@@ -319,7 +404,7 @@ const ManagerDashboard = () => {
                         sm:p-8
                     "
                 >
-                    {/* Decorative circles */}
+                    {/* DECORATIVE CIRCLE */}
 
                     <div
                         className="
@@ -347,30 +432,87 @@ const ManagerDashboard = () => {
                         "
                     />
 
-                    <div className="relative flex flex-col justify-between gap-6 sm:flex-row sm:items-end">
-
+                    <div
+                        className="
+                            relative
+                            flex
+                            flex-col
+                            justify-between
+                            gap-6
+                            sm:flex-row
+                            sm:items-end
+                        "
+                    >
                         <div>
+                            {/* BADGE */}
 
-                            <div className="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-medium text-blue-600 dark:border-blue-500/20 dark:bg-blue-500/10 dark:text-blue-400">
-                                <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />
+                            <div
+                                className="
+                                    inline-flex
+                                    items-center
+                                    gap-2
+                                    rounded-full
+                                    border
+                                    border-blue-200
+                                    bg-blue-50
+                                    px-3
+                                    py-1
+                                    text-xs
+                                    font-medium
+                                    text-blue-600
+
+                                    dark:border-blue-500/20
+                                    dark:bg-blue-500/10
+                                    dark:text-blue-400
+                                "
+                            >
+                                <span
+                                    className="
+                                        h-1.5
+                                        w-1.5
+                                        rounded-full
+                                        bg-blue-500
+                                    "
+                                />
+
                                 Manager Portal
                             </div>
 
-                            <h1 className="mt-4 text-3xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-4xl">
-                                Welcome, {username} 
+                            {/* TITLE */}
+
+                            <h1
+                                className="
+                                    mt-4
+                                    text-3xl
+                                    font-bold
+                                    tracking-tight
+                                    text-slate-900
+                                    dark:text-white
+                                    sm:text-4xl
+                                "
+                            >
+                                Welcome, {username}
                             </h1>
 
-                            <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-500 dark:text-slate-400 sm:text-base">
-                                Manage employees, review leave
-                                applications, and monitor
-                                approval activity from one
-                                place.
+                            {/* DESCRIPTION */}
+
+                            <p
+                                className="
+                                    mt-3
+                                    max-w-2xl
+                                    text-sm
+                                    leading-6
+                                    text-slate-500
+                                    dark:text-slate-400
+                                    sm:text-base
+                                "
+                            >
+                                Manage employees, review
+                                leave applications, and
+                                monitor approval activity
+                                from one place.
                             </p>
-
                         </div>
-
-                       
-
                     </div>
                 </section>
 
@@ -400,26 +542,60 @@ const ManagerDashboard = () => {
                             sm:justify-between
                         "
                     >
-                        <div className="flex items-center gap-3">
+                        <div
+                            className="
+                                flex
+                                items-center
+                                gap-3
+                            "
+                        >
+                            <div
+                                className="
+                                    flex
+                                    h-9
+                                    w-9
+                                    shrink-0
+                                    items-center
+                                    justify-center
+                                    rounded-lg
+                                    bg-red-100
+                                    text-red-600
 
-                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-red-100 text-red-600 dark:bg-red-500/10 dark:text-red-400">
+                                    dark:bg-red-500/10
+                                    dark:text-red-400
+                                "
+                            >
                                 <XCircle size={18} />
                             </div>
 
-                            <p className="text-sm text-red-600 dark:text-red-400">
+                            <p
+                                className="
+                                    text-sm
+                                    text-red-600
+                                    dark:text-red-400
+                                "
+                            >
                                 {error}
                             </p>
-
                         </div>
 
                         <button
                             type="button"
                             onClick={loadDashboard}
-                            className="text-left text-sm font-semibold text-red-600 transition hover:text-red-800 dark:text-red-300 dark:hover:text-white"
+                            className="
+                                text-left
+                                text-sm
+                                font-semibold
+                                text-red-600
+                                transition
+                                hover:text-red-800
+
+                                dark:text-red-300
+                                dark:hover:text-white
+                            "
                         >
                             Retry
                         </button>
-
                     </div>
                 )}
 
@@ -428,19 +604,40 @@ const ManagerDashboard = () => {
                 ========================================= */}
 
                 <section className="mt-8">
+                    {/* SECTION HEADER */}
 
-                    <div className="mb-4 flex items-center justify-between">
-
+                    <div
+                        className="
+                            mb-4
+                            flex
+                            items-center
+                            justify-between
+                        "
+                    >
                         <div>
-                            <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
+                            <h2
+                                className="
+                                    text-lg
+                                    font-semibold
+                                    text-slate-900
+                                    dark:text-white
+                                "
+                            >
                                 Overview
                             </h2>
 
-                            <p className="mt-1 text-sm text-slate-500">
+                            <p
+                                className="
+                                    mt-1
+                                    text-sm
+                                    text-slate-500
+                                "
+                            >
                                 Current leave management
                                 statistics
                             </p>
                         </div>
+
                         {/* REFRESH */}
 
                         <button
@@ -492,12 +689,18 @@ const ManagerDashboard = () => {
                                 ? "Refreshing..."
                                 : "Refresh"}
                         </button>
-
                     </div>
-                     
 
-                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                    {/* STAT CARDS */}
 
+                    <div
+                        className="
+                            grid
+                            gap-4
+                            sm:grid-cols-2
+                            lg:grid-cols-4
+                        "
+                    >
                         {/* EMPLOYEES */}
 
                         <div
@@ -522,28 +725,63 @@ const ManagerDashboard = () => {
                                 dark:hover:border-blue-500/30
                             "
                         >
-                            <div className="flex items-start justify-between">
-
-                                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400">
+                            <div
+                                className="
+                                    flex
+                                    items-start
+                                    justify-between
+                                "
+                            >
+                                <div
+                                    className="
+                                        flex
+                                        h-11
+                                        w-11
+                                        items-center
+                                        justify-center
+                                        rounded-xl
+                                        bg-blue-500/10
+                                        text-blue-600
+                                        dark:text-blue-400
+                                    "
+                                >
                                     <Users size={22} />
                                 </div>
 
-                                <span className="text-xs font-medium text-slate-400">
+                                <span
+                                    className="
+                                        text-xs
+                                        font-medium
+                                        text-slate-400
+                                    "
+                                >
                                     Total
                                 </span>
-
                             </div>
 
-                            <p className="mt-5 text-sm text-slate-500">
+                            <p
+                                className="
+                                    mt-5
+                                    text-sm
+                                    text-slate-500
+                                "
+                            >
                                 Employees
                             </p>
 
-                            <p className="mt-1 text-3xl font-bold text-slate-900 dark:text-white">
+                            <p
+                                className="
+                                    mt-1
+                                    text-3xl
+                                    font-bold
+                                    text-slate-900
+                                    dark:text-white
+                                "
+                            >
                                 {loading
                                     ? "..."
                                     : employees.length}
                             </p>
-
                         </div>
 
                         {/* PENDING */}
@@ -569,28 +807,63 @@ const ManagerDashboard = () => {
                                 dark:hover:border-yellow-500/30
                             "
                         >
-                            <div className="flex items-start justify-between">
-
-                                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-yellow-500/10 text-yellow-600 dark:text-yellow-400">
+                            <div
+                                className="
+                                    flex
+                                    items-start
+                                    justify-between
+                                "
+                            >
+                                <div
+                                    className="
+                                        flex
+                                        h-11
+                                        w-11
+                                        items-center
+                                        justify-center
+                                        rounded-xl
+                                        bg-yellow-500/10
+                                        text-yellow-600
+                                        dark:text-yellow-400
+                                    "
+                                >
                                     <Clock3 size={22} />
                                 </div>
 
-                                <span className="text-xs font-medium text-slate-400">
+                                <span
+                                    className="
+                                        text-xs
+                                        font-medium
+                                        text-slate-400
+                                    "
+                                >
                                     Pending
                                 </span>
-
                             </div>
 
-                            <p className="mt-5 text-sm text-slate-500">
+                            <p
+                                className="
+                                    mt-5
+                                    text-sm
+                                    text-slate-500
+                                "
+                            >
                                 Pending Requests
                             </p>
 
-                            <p className="mt-1 text-3xl font-bold text-slate-900 dark:text-white">
+                            <p
+                                className="
+                                    mt-1
+                                    text-3xl
+                                    font-bold
+                                    text-slate-900
+                                    dark:text-white
+                                "
+                            >
                                 {loading
                                     ? "..."
                                     : pendingCount}
                             </p>
-
                         </div>
 
                         {/* APPROVED */}
@@ -616,28 +889,63 @@ const ManagerDashboard = () => {
                                 dark:hover:border-green-500/30
                             "
                         >
-                            <div className="flex items-start justify-between">
-
-                                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-green-500/10 text-green-600 dark:text-green-400">
+                            <div
+                                className="
+                                    flex
+                                    items-start
+                                    justify-between
+                                "
+                            >
+                                <div
+                                    className="
+                                        flex
+                                        h-11
+                                        w-11
+                                        items-center
+                                        justify-center
+                                        rounded-xl
+                                        bg-green-500/10
+                                        text-green-600
+                                        dark:text-green-400
+                                    "
+                                >
                                     <CheckCircle size={22} />
                                 </div>
 
-                                <span className="text-xs font-medium text-slate-400">
+                                <span
+                                    className="
+                                        text-xs
+                                        font-medium
+                                        text-slate-400
+                                    "
+                                >
                                     Approved
                                 </span>
-
                             </div>
 
-                            <p className="mt-5 text-sm text-slate-500">
+                            <p
+                                className="
+                                    mt-5
+                                    text-sm
+                                    text-slate-500
+                                "
+                            >
                                 Approved Requests
                             </p>
 
-                            <p className="mt-1 text-3xl font-bold text-slate-900 dark:text-white">
+                            <p
+                                className="
+                                    mt-1
+                                    text-3xl
+                                    font-bold
+                                    text-slate-900
+                                    dark:text-white
+                                "
+                            >
                                 {loading
                                     ? "..."
                                     : approvedCount}
                             </p>
-
                         </div>
 
                         {/* REJECTED */}
@@ -663,32 +971,65 @@ const ManagerDashboard = () => {
                                 dark:hover:border-red-500/30
                             "
                         >
-                            <div className="flex items-start justify-between">
-
-                                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-red-500/10 text-red-600 dark:text-red-400">
+                            <div
+                                className="
+                                    flex
+                                    items-start
+                                    justify-between
+                                "
+                            >
+                                <div
+                                    className="
+                                        flex
+                                        h-11
+                                        w-11
+                                        items-center
+                                        justify-center
+                                        rounded-xl
+                                        bg-red-500/10
+                                        text-red-600
+                                        dark:text-red-400
+                                    "
+                                >
                                     <XCircle size={22} />
                                 </div>
 
-                                <span className="text-xs font-medium text-slate-400">
+                                <span
+                                    className="
+                                        text-xs
+                                        font-medium
+                                        text-slate-400
+                                    "
+                                >
                                     Rejected
                                 </span>
-
                             </div>
 
-                            <p className="mt-5 text-sm text-slate-500">
+                            <p
+                                className="
+                                    mt-5
+                                    text-sm
+                                    text-slate-500
+                                "
+                            >
                                 Rejected Requests
                             </p>
 
-                            <p className="mt-1 text-3xl font-bold text-slate-900 dark:text-white">
+                            <p
+                                className="
+                                    mt-1
+                                    text-3xl
+                                    font-bold
+                                    text-slate-900
+                                    dark:text-white
+                                "
+                            >
                                 {loading
                                     ? "..."
                                     : rejectedCount}
                             </p>
-
                         </div>
-
                     </div>
-
                 </section>
 
                 {/* =========================================
@@ -696,21 +1037,36 @@ const ManagerDashboard = () => {
                 ========================================= */}
 
                 <section className="mt-10">
-
                     <div className="mb-4">
-
-                        <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
+                        <h2
+                            className="
+                                text-lg
+                                font-semibold
+                                text-slate-900
+                                dark:text-white
+                            "
+                        >
                             Quick Actions
                         </h2>
 
-                        <p className="mt-1 text-sm text-slate-500">
+                        <p
+                            className="
+                                mt-1
+                                text-sm
+                                text-slate-500
+                            "
+                        >
                             Access the main manager tools
                         </p>
-
                     </div>
 
-                    <div className="grid gap-5 md:grid-cols-2">
-
+                    <div
+                        className="
+                            grid
+                            gap-5
+                            md:grid-cols-2
+                        "
+                    >
                         {/* LEAVE REQUESTS */}
 
                         <button
@@ -744,13 +1100,42 @@ const ManagerDashboard = () => {
                                 dark:hover:border-blue-500/40
                             "
                         >
-                            <div className="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-blue-500/5 blur-3xl transition group-hover:bg-blue-500/15" />
+                            <div
+                                className="
+                                    absolute
+                                    -right-10
+                                    -top-10
+                                    h-32
+                                    w-32
+                                    rounded-full
+                                    bg-blue-500/5
+                                    blur-3xl
+                                    transition
+                                    group-hover:bg-blue-500/15
+                                "
+                            />
 
                             <div className="relative">
-
-                                <div className="flex items-center justify-between">
-
-                                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400">
+                                <div
+                                    className="
+                                        flex
+                                        items-center
+                                        justify-between
+                                    "
+                                >
+                                    <div
+                                        className="
+                                            flex
+                                            h-12
+                                            w-12
+                                            items-center
+                                            justify-center
+                                            rounded-xl
+                                            bg-blue-500/10
+                                            text-blue-600
+                                            dark:text-blue-400
+                                        "
+                                    >
                                         <FileText size={24} />
                                     </div>
 
@@ -760,7 +1145,6 @@ const ManagerDashboard = () => {
                                             text-slate-400
                                             transition
                                             duration-300
-
                                             group-hover:translate-x-1
                                             group-hover:text-blue-600
 
@@ -768,29 +1152,57 @@ const ManagerDashboard = () => {
                                             dark:group-hover:text-blue-400
                                         "
                                     />
-
                                 </div>
 
-                                <h2 className="mt-6 text-xl font-semibold text-slate-900 dark:text-white">
+                                <h2
+                                    className="
+                                        mt-6
+                                        text-xl
+                                        font-semibold
+                                        text-slate-900
+                                        dark:text-white
+                                    "
+                                >
                                     Leave Requests
                                 </h2>
 
-                                <p className="mt-2 max-w-lg text-sm leading-6 text-slate-500">
+                                <p
+                                    className="
+                                        mt-2
+                                        max-w-lg
+                                        text-sm
+                                        leading-6
+                                        text-slate-500
+                                    "
+                                >
                                     Review employee leave
                                     applications and approve
                                     or reject pending requests.
                                 </p>
 
-                                <div className="mt-5 flex items-center gap-2 text-sm font-medium text-blue-600 dark:text-blue-400">
+                                <div
+                                    className="
+                                        mt-5
+                                        flex
+                                        items-center
+                                        gap-2
+                                        text-sm
+                                        font-medium
+                                        text-blue-600
+                                        dark:text-blue-400
+                                    "
+                                >
                                     Manage requests
+
                                     <ArrowRight
                                         size={15}
-                                        className="transition group-hover:translate-x-1"
+                                        className="
+                                            transition
+                                            group-hover:translate-x-1
+                                        "
                                     />
                                 </div>
-
                             </div>
-
                         </button>
 
                         {/* EMPLOYEES */}
@@ -826,13 +1238,42 @@ const ManagerDashboard = () => {
                                 dark:hover:border-indigo-500/40
                             "
                         >
-                            <div className="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-indigo-500/5 blur-3xl transition group-hover:bg-indigo-500/15" />
+                            <div
+                                className="
+                                    absolute
+                                    -right-10
+                                    -top-10
+                                    h-32
+                                    w-32
+                                    rounded-full
+                                    bg-indigo-500/5
+                                    blur-3xl
+                                    transition
+                                    group-hover:bg-indigo-500/15
+                                "
+                            />
 
                             <div className="relative">
-
-                                <div className="flex items-center justify-between">
-
-                                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
+                                <div
+                                    className="
+                                        flex
+                                        items-center
+                                        justify-between
+                                    "
+                                >
+                                    <div
+                                        className="
+                                            flex
+                                            h-12
+                                            w-12
+                                            items-center
+                                            justify-center
+                                            rounded-xl
+                                            bg-indigo-500/10
+                                            text-indigo-600
+                                            dark:text-indigo-400
+                                        "
+                                    >
                                         <Users size={24} />
                                     </div>
 
@@ -842,7 +1283,6 @@ const ManagerDashboard = () => {
                                             text-slate-400
                                             transition
                                             duration-300
-
                                             group-hover:translate-x-1
                                             group-hover:text-indigo-600
 
@@ -850,41 +1290,64 @@ const ManagerDashboard = () => {
                                             dark:group-hover:text-indigo-400
                                         "
                                     />
-
                                 </div>
 
-                                <h2 className="mt-6 text-xl font-semibold text-slate-900 dark:text-white">
+                                <h2
+                                    className="
+                                        mt-6
+                                        text-xl
+                                        font-semibold
+                                        text-slate-900
+                                        dark:text-white
+                                    "
+                                >
                                     Employees
                                 </h2>
 
-                                <p className="mt-2 max-w-lg text-sm leading-6 text-slate-500">
+                                <p
+                                    className="
+                                        mt-2
+                                        max-w-lg
+                                        text-sm
+                                        leading-6
+                                        text-slate-500
+                                    "
+                                >
                                     View employees registered
                                     in the employee leave
                                     management system.
                                 </p>
 
-                                <div className="mt-5 flex items-center gap-2 text-sm font-medium text-indigo-600 dark:text-indigo-400">
+                                <div
+                                    className="
+                                        mt-5
+                                        flex
+                                        items-center
+                                        gap-2
+                                        text-sm
+                                        font-medium
+                                        text-indigo-600
+                                        dark:text-indigo-400
+                                    "
+                                >
                                     View employees
+
                                     <ArrowRight
                                         size={15}
-                                        className="transition group-hover:translate-x-1"
+                                        className="
+                                            transition
+                                            group-hover:translate-x-1
+                                        "
                                     />
                                 </div>
-
                             </div>
-
                         </button>
-
                     </div>
-
                 </section>
 
-                {/* =========================================
-                    FOOTER SPACE
-                ========================================= */}
+                {/* FOOTER SPACE */}
 
                 <div className="h-6" />
-
             </main>
         </div>
     );

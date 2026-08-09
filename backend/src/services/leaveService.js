@@ -1,5 +1,9 @@
 const pool = require("../config/db");
 
+// ========================================
+// CREATE LEAVE REQUEST
+// ========================================
+
 const createLeaveRequest = async ({
     employeeId,
     reason,
@@ -10,10 +14,37 @@ const createLeaveRequest = async ({
     const client = await pool.connect();
 
     try {
-        // Start transaction
+        // ========================================
+        // START TRANSACTION
+        // ========================================
+
         await client.query("BEGIN");
 
-        // 1. Create leave request
+        // ========================================
+        // 1. GET EMPLOYEE DETAILS
+        // ========================================
+
+        const employeeResult = await client.query(
+            `
+            SELECT
+                id,
+                username
+            FROM users
+            WHERE id = $1
+            `,
+            [employeeId]
+        );
+
+        if (employeeResult.rows.length === 0) {
+            throw new Error("Employee not found");
+        }
+
+        const employee = employeeResult.rows[0];
+
+        // ========================================
+        // 2. CREATE LEAVE REQUEST
+        // ========================================
+
         const leaveResult = await client.query(
             `
             INSERT INTO leave_requests (
@@ -44,7 +75,10 @@ const createLeaveRequest = async ({
 
         const leaveRequest = leaveResult.rows[0];
 
-        // 2. Save document metadata
+        // ========================================
+        // 3. SAVE SUPPORTING DOCUMENT
+        // ========================================
+
         if (file) {
             await client.query(
                 `
@@ -69,13 +103,74 @@ const createLeaveRequest = async ({
             );
         }
 
-        // Commit transaction
+        // ========================================
+        // 4. FIND ALL MANAGERS
+        // ========================================
+
+        const managerResult = await client.query(
+            `
+            SELECT
+                id,
+                username
+            FROM users
+            WHERE LOWER(role) = 'manager'
+            `
+        );
+
+        // ========================================
+        // 5. CREATE NOTIFICATION MESSAGE
+        // ========================================
+
+        const employeeName =
+            employee.username || "Employee";
+
+        const notificationMessage =
+            `New leave request submitted by ${employeeName} from ${startDate} to ${endDate}.`;
+
+        // ========================================
+        // 6. CREATE NOTIFICATION FOR EACH MANAGER
+        // ========================================
+
+        for (const manager of managerResult.rows) {
+            await client.query(
+                `
+                INSERT INTO notifications (
+                    user_id,
+                    message,
+                    is_read,
+                    created_at
+                )
+                VALUES ($1, $2, false, NOW())
+                `,
+                [
+                    manager.id,
+                    notificationMessage,
+                ]
+            );
+        }
+
+        // ========================================
+        // 7. COMMIT TRANSACTION
+        // ========================================
+
         await client.query("COMMIT");
 
         return leaveRequest;
+
     } catch (error) {
+        // ========================================
+        // ROLLBACK TRANSACTION
+        // ========================================
+
         await client.query("ROLLBACK");
+
+        console.error(
+            "Create leave request service error:",
+            error
+        );
+
         throw error;
+
     } finally {
         client.release();
     }
@@ -125,205 +220,146 @@ const getMyLeaveRequests = async (employeeId) => {
 // UPDATE LEAVE REQUEST
 // ========================================
 
-const updateLeaveRequest = async (req, res) => {
-
-    let uploadedNewFile = null;
+const updateLeaveRequest = async (
+    leaveId,
+    employeeId,
+    reason,
+    startDate,
+    endDate
+) => {
+    const client = await pool.connect();
 
     try {
+        // ========================================
+        // START TRANSACTION
+        // ========================================
 
-        const { id } = req.params;
+        await client.query("BEGIN");
 
-        const {
-            reason,
-            startDate,
-            endDate
-        } = req.body;
+        // ========================================
+        // 1. FIND EXISTING LEAVE
+        // ========================================
 
-        uploadedNewFile = req.file || null;
-
-        if (
-            !reason ||
-            !reason.trim() ||
-            !startDate ||
-            !endDate
-        ) {
-
-            // If validation fails after upload,
-            // remove newly uploaded file
-            if (
-                uploadedNewFile &&
-                fs.existsSync(uploadedNewFile.path)
-            ) {
-                fs.unlinkSync(
-                    uploadedNewFile.path
-                );
-            }
-
-            return res.status(400).json({
-                success: false,
-                message:
-                    "Reason, start date and end date are required"
-            });
-        }
-
-
-        if (endDate < startDate) {
-
-            if (
-                uploadedNewFile &&
-                fs.existsSync(uploadedNewFile.path)
-            ) {
-                fs.unlinkSync(
-                    uploadedNewFile.path
-                );
-            }
-
-            return res.status(400).json({
-                success: false,
-                message:
-                    "End date cannot be before start date"
-            });
-        }
-
-
-        // JWT user ID
-        const employeeId = req.user.id;
-
-
-        const result =
-            await leaveService.updateLeaveRequest(
+        const existingResult = await client.query(
+            `
+            SELECT
                 id,
+                status
+            FROM leave_requests
+            WHERE id = $1
+            AND employee_id = $2
+            `,
+            [
+                leaveId,
                 employeeId,
-                reason.trim(),
+            ]
+        );
+
+        if (existingResult.rows.length === 0) {
+            throw new Error(
+                "Leave request not found"
+            );
+        }
+
+        const existing = existingResult.rows[0];
+
+        // ========================================
+        // 2. ONLY PENDING LEAVES CAN BE UPDATED
+        // ========================================
+
+        if (existing.status !== "pending") {
+            throw new Error(
+                "Only pending leave requests can be updated"
+            );
+        }
+
+        // ========================================
+        // 3. UPDATE LEAVE REQUEST
+        // ========================================
+
+        const updateResult = await client.query(
+            `
+            UPDATE leave_requests
+            SET
+                reason = $1,
+                start_date = $2,
+                end_date = $3
+            WHERE id = $4
+            AND employee_id = $5
+            RETURNING
+                id,
+                employee_id,
+                reason,
+                start_date,
+                end_date,
+                status,
+                remarks,
+                reviewed_at,
+                created_at
+            `,
+            [
+                reason,
                 startDate,
                 endDate,
-                uploadedNewFile
-            );
+                leaveId,
+                employeeId,
+            ]
+        );
 
+        const leaveRequest = updateResult.rows[0];
 
-        // Delete old physical file
-        if (
-            result.oldFilePath &&
-            fs.existsSync(result.oldFilePath)
-        ) {
+        // ========================================
+        // 4. COMMIT
+        // ========================================
 
-            fs.unlinkSync(
-                result.oldFilePath
-            );
+        await client.query("COMMIT");
 
-            console.log(
-                "Old document deleted:",
-                result.oldFilePath
-            );
-        }
-
-
-        return res.status(200).json({
-
-            success: true,
-
-            message:
-                "Leave request updated successfully",
-
-            leaveRequest:
-                result.leaveRequest
-
-        });
-
+        return leaveRequest;
 
     } catch (error) {
-
-        // If database update failed,
-        // remove newly uploaded file
-        if (
-            uploadedNewFile &&
-            fs.existsSync(uploadedNewFile.path)
-        ) {
-
-            try {
-
-                fs.unlinkSync(
-                    uploadedNewFile.path
-                );
-
-            } catch (fileError) {
-
-                console.error(
-                    "Failed to remove uploaded file:",
-                    fileError
-                );
-            }
-        }
-
+        await client.query("ROLLBACK");
 
         console.error(
-            "Update leave error:",
+            "Update leave request service error:",
             error
         );
 
+        throw error;
 
-        if (
-            error.message ===
-            "Leave request not found"
-        ) {
-
-            return res.status(404).json({
-
-                success: false,
-
-                message:
-                    "Leave request not found"
-
-            });
-        }
-
-
-        if (
-            error.message ===
-            "Only pending leave requests can be updated"
-        ) {
-
-            return res.status(400).json({
-
-                success: false,
-
-                message:
-                    error.message
-
-            });
-        }
-
-
-        return res.status(500).json({
-
-            success: false,
-
-            message:
-                "Failed to update leave request"
-
-        });
+    } finally {
+        client.release();
     }
 };
+
 
 // ========================================
 // DELETE LEAVE REQUEST
 // ========================================
 
-const deleteLeaveRequest = async (leaveId, employeeId) => {
-
+const deleteLeaveRequest = async (
+    leaveId,
+    employeeId
+) => {
     const client = await pool.connect();
 
     try {
+        // ========================================
+        // START TRANSACTION
+        // ========================================
 
         await client.query("BEGIN");
 
-        // Get leave + document information
+        // ========================================
+        // 1. GET LEAVE + DOCUMENT
+        // ========================================
+
         const existing = await client.query(
             `
             SELECT
                 lr.id,
                 lr.status,
                 ld.file_path
+
             FROM leave_requests lr
 
             LEFT JOIN leave_documents ld
@@ -332,11 +368,17 @@ const deleteLeaveRequest = async (leaveId, employeeId) => {
             WHERE lr.id = $1
             AND lr.employee_id = $2
             `,
-            [leaveId, employeeId]
+            [
+                leaveId,
+                employeeId,
+            ]
         );
 
-        if (existing.rows.length === 0) {
+        // ========================================
+        // 2. CHECK LEAVE EXISTS
+        // ========================================
 
+        if (existing.rows.length === 0) {
             throw new Error(
                 "Leave request not found"
             );
@@ -344,17 +386,20 @@ const deleteLeaveRequest = async (leaveId, employeeId) => {
 
         const leave = existing.rows[0];
 
-        // Only pending requests can be deleted
-        if (leave.status !== "pending") {
+        // ========================================
+        // 3. ONLY PENDING LEAVES CAN BE DELETED
+        // ========================================
 
+        if (leave.status !== "pending") {
             throw new Error(
                 "Only pending leave requests can be deleted"
             );
         }
 
-        // Delete leave request
-        // leave_documents will be deleted automatically
-        // because of ON DELETE CASCADE
+        // ========================================
+        // 4. DELETE LEAVE REQUEST
+        // ========================================
+
         await client.query(
             `
             DELETE FROM leave_requests
@@ -362,28 +407,38 @@ const deleteLeaveRequest = async (leaveId, employeeId) => {
             AND employee_id = $2
             AND status = 'pending'
             `,
-            [leaveId, employeeId]
+            [
+                leaveId,
+                employeeId,
+            ]
         );
+
+        // ========================================
+        // 5. COMMIT
+        // ========================================
 
         await client.query("COMMIT");
 
         return {
             success: true,
-            filePath: leave.file_path
+            filePath: leave.file_path,
         };
 
     } catch (error) {
-
         await client.query("ROLLBACK");
+
+        console.error(
+            "Delete leave request service error:",
+            error
+        );
 
         throw error;
 
     } finally {
-
         client.release();
-
     }
 };
+
 
 // ========================================
 // EXPORTS

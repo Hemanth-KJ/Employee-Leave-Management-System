@@ -22,7 +22,7 @@ import {
     deleteLeave,
 } from "../../services/leaveService";
 
-import ThemeToggle from "../../components/ThemeToggle";
+
 
 const LeaveHistory = () => {
     const navigate = useNavigate();
@@ -391,7 +391,7 @@ const LeaveHistory = () => {
 
                     <div className="flex items-center gap-2">
 
-                        <ThemeToggle />
+                     
 
                         <button
                             type="button"

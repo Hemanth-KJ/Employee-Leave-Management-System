@@ -7,8 +7,7 @@ import {
     XCircle,
     FileText,
     RefreshCw,
-    Sun,
-    Moon,
+
     CalendarDays,
     UserRound,
     Clock3,
@@ -33,27 +32,9 @@ const ManagerLeaves = () => {
     const [remarks, setRemarks] = useState("");
     const [processing, setProcessing] = useState(false);
 
-    // =========================
-    // THEME
-    // =========================
 
-    const [darkMode, setDarkMode] = useState(() => {
-        return localStorage.getItem("theme") !== "light";
-    });
 
-    useEffect(() => {
-        if (darkMode) {
-            document.documentElement.classList.add("dark");
-            localStorage.setItem("theme", "dark");
-        } else {
-            document.documentElement.classList.remove("dark");
-            localStorage.setItem("theme", "light");
-        }
-    }, [darkMode]);
-
-    const toggleTheme = () => {
-        setDarkMode((current) => !current);
-    };
+    
 
     // =========================
     // LOAD LEAVES
@@ -323,42 +304,7 @@ const ManagerLeaves = () => {
 
                     <div className="flex items-center gap-2">
 
-                        {/* THEME TOGGLE */}
-
-                        <button
-                            type="button"
-                            onClick={toggleTheme}
-                            aria-label={
-                                darkMode
-                                    ? "Switch to light mode"
-                                    : "Switch to dark mode"
-                            }
-                            className="group flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 transition-all duration-300 hover:border-slate-300 hover:bg-slate-100 dark:border-slate-800 dark:bg-slate-900 dark:text-yellow-400 dark:hover:border-slate-700 dark:hover:bg-slate-800"
-                        >
-
-                            <span
-                                className={`transition-transform duration-500 ${
-                                    darkMode
-                                        ? "rotate-0"
-                                        : "rotate-360"
-                                }`}
-                            >
-
-                                {darkMode ? (
-                                    <Sun
-                                        size={18}
-                                        strokeWidth={2}
-                                    />
-                                ) : (
-                                    <Moon
-                                        size={18}
-                                        strokeWidth={2}
-                                    />
-                                )}
-
-                            </span>
-
-                        </button>
+                      
 
                         {/* REFRESH */}
 

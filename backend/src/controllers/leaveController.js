@@ -1,7 +1,6 @@
 const leaveService = require("../services/leaveService");
 const fs = require("fs");
 
-
 // ========================================
 // CREATE LEAVE REQUEST
 // ========================================
@@ -14,7 +13,10 @@ const createLeaveRequest = async (req, res) => {
             end_date,
         } = req.body;
 
-        // Validate required fields
+        // ========================================
+        // VALIDATE REQUIRED FIELDS
+        // ========================================
+
         if (
             !reason ||
             !start_date ||
@@ -27,7 +29,10 @@ const createLeaveRequest = async (req, res) => {
             });
         }
 
-        // Validate supporting document
+        // ========================================
+        // VALIDATE SUPPORTING DOCUMENT
+        // ========================================
+
         if (!req.file) {
             return res.status(400).json({
                 success: false,
@@ -36,7 +41,10 @@ const createLeaveRequest = async (req, res) => {
             });
         }
 
-        // Validate date order
+        // ========================================
+        // VALIDATE DATE ORDER
+        // ========================================
+
         const startDate = new Date(start_date);
         const endDate = new Date(end_date);
 
@@ -48,8 +56,15 @@ const createLeaveRequest = async (req, res) => {
             });
         }
 
-        // Employee ID comes from JWT
+        // ========================================
+        // EMPLOYEE ID FROM JWT
+        // ========================================
+
         const employeeId = req.user.id;
+
+        // ========================================
+        // CREATE LEAVE REQUEST
+        // ========================================
 
         const leaveRequest =
             await leaveService.createLeaveRequest({
@@ -69,7 +84,10 @@ const createLeaveRequest = async (req, res) => {
 
     } catch (error) {
 
-        // Delete uploaded file if database operation fails
+        // ========================================
+        // DELETE UPLOADED FILE IF DB OPERATION FAILS
+        // ========================================
+
         if (
             req.file &&
             req.file.path
@@ -115,6 +133,7 @@ const getMyLeaveRequests = async (
     res
 ) => {
     try {
+
         // Employee ID comes from JWT
         const employeeId = req.user.id;
 
@@ -154,6 +173,7 @@ const updateLeaveRequest = async (
     res
 ) => {
     try {
+
         const { id } = req.params;
 
         const {
@@ -162,7 +182,10 @@ const updateLeaveRequest = async (
             endDate,
         } = req.body;
 
-        // Validate required fields
+        // ========================================
+        // VALIDATE REQUIRED FIELDS
+        // ========================================
+
         if (
             !reason ||
             !reason.trim() ||
@@ -176,7 +199,10 @@ const updateLeaveRequest = async (
             });
         }
 
-        // Validate date order
+        // ========================================
+        // VALIDATE DATE ORDER
+        // ========================================
+
         const start = new Date(startDate);
         const end = new Date(endDate);
 
@@ -188,8 +214,15 @@ const updateLeaveRequest = async (
             });
         }
 
-        // Employee ID comes from JWT
+        // ========================================
+        // EMPLOYEE ID FROM JWT
+        // ========================================
+
         const employeeId = req.user.id;
+
+        // ========================================
+        // UPDATE LEAVE
+        // ========================================
 
         const leave =
             await leaveService.updateLeaveRequest(
@@ -214,6 +247,10 @@ const updateLeaveRequest = async (
             error
         );
 
+        // ========================================
+        // NOT FOUND
+        // ========================================
+
         if (
             error.message ===
             "Leave request not found"
@@ -223,6 +260,10 @@ const updateLeaveRequest = async (
                 message: error.message,
             });
         }
+
+        // ========================================
+        // ONLY PENDING CAN BE UPDATED
+        // ========================================
 
         if (
             error.message ===
@@ -247,14 +288,24 @@ const updateLeaveRequest = async (
 // DELETE LEAVE REQUEST
 // ========================================
 
-const deleteLeaveRequest = async (req, res) => {
+const deleteLeaveRequest = async (
+    req,
+    res
+) => {
 
     try {
 
         const { id } = req.params;
 
-        // User ID comes from JWT
+        // ========================================
+        // EMPLOYEE ID FROM JWT
+        // ========================================
+
         const employeeId = req.user.id;
+
+        // ========================================
+        // DELETE LEAVE
+        // ========================================
 
         const result =
             await leaveService.deleteLeaveRequest(
@@ -262,11 +313,15 @@ const deleteLeaveRequest = async (req, res) => {
                 employeeId
             );
 
+        // ========================================
+        // DELETE PHYSICAL UPLOADED FILE
+        // ========================================
 
-        // Delete physical uploaded file
         if (
             result.filePath &&
-            fs.existsSync(result.filePath)
+            fs.existsSync(
+                result.filePath
+            )
         ) {
 
             fs.unlinkSync(
@@ -279,16 +334,14 @@ const deleteLeaveRequest = async (req, res) => {
             );
         }
 
-
         return res.status(200).json({
 
             success: true,
 
             message:
-                "Leave request and supporting document deleted successfully"
+                "Leave request and supporting document deleted successfully",
 
         });
-
 
     } catch (error) {
 
@@ -297,6 +350,9 @@ const deleteLeaveRequest = async (req, res) => {
             error
         );
 
+        // ========================================
+        // NOT FOUND
+        // ========================================
 
         if (
             error.message ===
@@ -308,11 +364,14 @@ const deleteLeaveRequest = async (req, res) => {
                 success: false,
 
                 message:
-                    "Leave request not found"
+                    "Leave request not found",
 
             });
         }
 
+        // ========================================
+        // ONLY PENDING CAN BE DELETED
+        // ========================================
 
         if (
             error.message ===
@@ -324,21 +383,19 @@ const deleteLeaveRequest = async (req, res) => {
                 success: false,
 
                 message:
-                    error.message
+                    error.message,
 
             });
         }
-
 
         return res.status(500).json({
 
             success: false,
 
             message:
-                "Failed to delete leave request"
+                "Failed to delete leave request",
 
         });
-
     }
 };
 
