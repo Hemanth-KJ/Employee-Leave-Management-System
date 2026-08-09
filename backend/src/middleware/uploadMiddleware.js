@@ -1,51 +1,48 @@
 const multer = require("multer");
-const path = require("path");
-const fs = require("fs");
+const { CloudinaryStorage } = require("multer-storage-cloudinary");
+const cloudinary = require("../config/cloudinary");
 
-// Upload directory
-const uploadDirectory = path.join(
-    __dirname,
-    "../../uploads/leaves"
-);
+// ========================================
+// CLOUDINARY STORAGE
+// ========================================
 
-// Create directory if it doesn't exist
-if (!fs.existsSync(uploadDirectory)) {
-    fs.mkdirSync(uploadDirectory, {
-        recursive: true,
-    });
-}
+const storage = new CloudinaryStorage({
+    cloudinary: cloudinary,
 
-// Storage configuration
-const storage = multer.diskStorage({
+    params: {
+        folder: "employee-leave-management/leaves",
 
-    destination: (req, file, cb) => {
-        cb(null, uploadDirectory);
-    },
-
-    filename: (req, file, cb) => {
-
-        const extension = path.extname(file.originalname);
-
-        const uniqueName =
-            `${Date.now()}-${Math.round(Math.random() * 1E9)}${extension}`;
-
-        cb(null, uniqueName);
+        allowed_formats: [
+            "pdf",
+            "jpg",
+            "jpeg",
+            "png",
+        ],
     },
 });
 
-// Allowed file types
+// ========================================
+// ALLOWED FILE TYPES
+// ========================================
+
 const allowedMimeTypes = [
     "application/pdf",
     "image/jpeg",
     "image/png",
 ];
 
-// File validation
+// ========================================
+// FILE VALIDATION
+// ========================================
+
 const fileFilter = (req, file, cb) => {
 
     if (allowedMimeTypes.includes(file.mimetype)) {
+
         cb(null, true);
+
     } else {
+
         cb(
             new Error(
                 "Only PDF, JPG, and PNG files are allowed"
@@ -55,7 +52,10 @@ const fileFilter = (req, file, cb) => {
     }
 };
 
-// Multer configuration
+// ========================================
+// MULTER CONFIGURATION
+// ========================================
+
 const upload = multer({
 
     storage,
@@ -65,6 +65,11 @@ const upload = multer({
     limits: {
         fileSize: 5 * 1024 * 1024,
     },
+
 });
+
+// ========================================
+// EXPORT
+// ========================================
 
 module.exports = upload;

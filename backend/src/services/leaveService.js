@@ -11,9 +11,11 @@ const createLeaveRequest = async ({
     endDate,
     file,
 }) => {
+
     const client = await pool.connect();
 
     try {
+
         // ========================================
         // START TRANSACTION
         // ========================================
@@ -36,7 +38,10 @@ const createLeaveRequest = async ({
         );
 
         if (employeeResult.rows.length === 0) {
-            throw new Error("Employee not found");
+
+            throw new Error(
+                "Employee not found"
+            );
         }
 
         const employee = employeeResult.rows[0];
@@ -73,13 +78,48 @@ const createLeaveRequest = async ({
             ]
         );
 
-        const leaveRequest = leaveResult.rows[0];
+        const leaveRequest =
+            leaveResult.rows[0];
 
         // ========================================
         // 3. SAVE SUPPORTING DOCUMENT
         // ========================================
 
         if (file) {
+
+            console.log(
+                "========== CLOUDINARY FILE =========="
+            );
+
+            console.log(
+                "Original name:",
+                file.originalname
+            );
+
+            console.log(
+                "Filename / Public ID:",
+                file.filename
+            );
+
+            console.log(
+                "Path:",
+                file.path
+            );
+
+            console.log(
+                "MIME type:",
+                file.mimetype
+            );
+
+            console.log(
+                "Size:",
+                file.size
+            );
+
+            console.log(
+                "===================================="
+            );
+
             await client.query(
                 `
                 INSERT INTO leave_documents (
@@ -131,7 +171,10 @@ const createLeaveRequest = async ({
         // 6. CREATE NOTIFICATION FOR EACH MANAGER
         // ========================================
 
-        for (const manager of managerResult.rows) {
+        for (
+            const manager of managerResult.rows
+        ) {
+
             await client.query(
                 `
                 INSERT INTO notifications (
@@ -158,6 +201,7 @@ const createLeaveRequest = async ({
         return leaveRequest;
 
     } catch (error) {
+
         // ========================================
         // ROLLBACK TRANSACTION
         // ========================================
@@ -172,6 +216,7 @@ const createLeaveRequest = async ({
         throw error;
 
     } finally {
+
         client.release();
     }
 };
@@ -181,7 +226,10 @@ const createLeaveRequest = async ({
 // GET MY LEAVE REQUESTS
 // ========================================
 
-const getMyLeaveRequests = async (employeeId) => {
+const getMyLeaveRequests = async (
+    employeeId
+) => {
+
     const result = await pool.query(
         `
         SELECT
@@ -227,9 +275,11 @@ const updateLeaveRequest = async (
     startDate,
     endDate
 ) => {
+
     const client = await pool.connect();
 
     try {
+
         // ========================================
         // START TRANSACTION
         // ========================================
@@ -240,34 +290,42 @@ const updateLeaveRequest = async (
         // 1. FIND EXISTING LEAVE
         // ========================================
 
-        const existingResult = await client.query(
-            `
-            SELECT
-                id,
-                status
-            FROM leave_requests
-            WHERE id = $1
-            AND employee_id = $2
-            `,
-            [
-                leaveId,
-                employeeId,
-            ]
-        );
+        const existingResult =
+            await client.query(
+                `
+                SELECT
+                    id,
+                    status
+                FROM leave_requests
+                WHERE id = $1
+                AND employee_id = $2
+                `,
+                [
+                    leaveId,
+                    employeeId,
+                ]
+            );
 
-        if (existingResult.rows.length === 0) {
+        if (
+            existingResult.rows.length === 0
+        ) {
+
             throw new Error(
                 "Leave request not found"
             );
         }
 
-        const existing = existingResult.rows[0];
+        const existing =
+            existingResult.rows[0];
 
         // ========================================
         // 2. ONLY PENDING LEAVES CAN BE UPDATED
         // ========================================
 
-        if (existing.status !== "pending") {
+        if (
+            existing.status !== "pending"
+        ) {
+
             throw new Error(
                 "Only pending leave requests can be updated"
             );
@@ -277,36 +335,38 @@ const updateLeaveRequest = async (
         // 3. UPDATE LEAVE REQUEST
         // ========================================
 
-        const updateResult = await client.query(
-            `
-            UPDATE leave_requests
-            SET
-                reason = $1,
-                start_date = $2,
-                end_date = $3
-            WHERE id = $4
-            AND employee_id = $5
-            RETURNING
-                id,
-                employee_id,
-                reason,
-                start_date,
-                end_date,
-                status,
-                remarks,
-                reviewed_at,
-                created_at
-            `,
-            [
-                reason,
-                startDate,
-                endDate,
-                leaveId,
-                employeeId,
-            ]
-        );
+        const updateResult =
+            await client.query(
+                `
+                UPDATE leave_requests
+                SET
+                    reason = $1,
+                    start_date = $2,
+                    end_date = $3
+                WHERE id = $4
+                AND employee_id = $5
+                RETURNING
+                    id,
+                    employee_id,
+                    reason,
+                    start_date,
+                    end_date,
+                    status,
+                    remarks,
+                    reviewed_at,
+                    created_at
+                `,
+                [
+                    reason,
+                    startDate,
+                    endDate,
+                    leaveId,
+                    employeeId,
+                ]
+            );
 
-        const leaveRequest = updateResult.rows[0];
+        const leaveRequest =
+            updateResult.rows[0];
 
         // ========================================
         // 4. COMMIT
@@ -317,6 +377,7 @@ const updateLeaveRequest = async (
         return leaveRequest;
 
     } catch (error) {
+
         await client.query("ROLLBACK");
 
         console.error(
@@ -327,6 +388,7 @@ const updateLeaveRequest = async (
         throw error;
 
     } finally {
+
         client.release();
     }
 };
@@ -340,9 +402,11 @@ const deleteLeaveRequest = async (
     leaveId,
     employeeId
 ) => {
+
     const client = await pool.connect();
 
     try {
+
         // ========================================
         // START TRANSACTION
         // ========================================
@@ -353,51 +417,89 @@ const deleteLeaveRequest = async (
         // 1. GET LEAVE + DOCUMENT
         // ========================================
 
-        const existing = await client.query(
-            `
-            SELECT
-                lr.id,
-                lr.status,
-                ld.file_path
+        const existing =
+            await client.query(
+                `
+                SELECT
+                    lr.id,
+                    lr.status,
 
-            FROM leave_requests lr
+                    ld.file_path,
+                    ld.stored_name,
+                    ld.mime_type
 
-            LEFT JOIN leave_documents ld
-                ON lr.id = ld.leave_request_id
+                FROM leave_requests lr
 
-            WHERE lr.id = $1
-            AND lr.employee_id = $2
-            `,
-            [
-                leaveId,
-                employeeId,
-            ]
-        );
+                LEFT JOIN leave_documents ld
+                    ON lr.id = ld.leave_request_id
+
+                WHERE lr.id = $1
+                AND lr.employee_id = $2
+                `,
+                [
+                    leaveId,
+                    employeeId,
+                ]
+            );
 
         // ========================================
         // 2. CHECK LEAVE EXISTS
         // ========================================
 
-        if (existing.rows.length === 0) {
+        if (
+            existing.rows.length === 0
+        ) {
+
             throw new Error(
                 "Leave request not found"
             );
         }
 
-        const leave = existing.rows[0];
+        const leave =
+            existing.rows[0];
 
         // ========================================
         // 3. ONLY PENDING LEAVES CAN BE DELETED
         // ========================================
 
-        if (leave.status !== "pending") {
+        if (
+            leave.status !== "pending"
+        ) {
+
             throw new Error(
                 "Only pending leave requests can be deleted"
             );
         }
 
         // ========================================
-        // 4. DELETE LEAVE REQUEST
+        // 4. LOG FILE INFORMATION
+        // ========================================
+
+        console.log(
+            "========== DELETE CLOUDINARY FILE =========="
+        );
+
+        console.log(
+            "File Public ID:",
+            leave.stored_name
+        );
+
+        console.log(
+            "File Path:",
+            leave.file_path
+        );
+
+        console.log(
+            "MIME Type:",
+            leave.mime_type
+        );
+
+        console.log(
+            "============================================"
+        );
+
+        // ========================================
+        // 5. DELETE LEAVE REQUEST
         // ========================================
 
         await client.query(
@@ -414,17 +516,32 @@ const deleteLeaveRequest = async (
         );
 
         // ========================================
-        // 5. COMMIT
+        // 6. COMMIT
         // ========================================
 
         await client.query("COMMIT");
 
+        // ========================================
+        // 7. RETURN CLOUDINARY INFORMATION
+        // ========================================
+
         return {
+
             success: true,
-            filePath: leave.file_path,
+
+            filePath:
+                leave.file_path,
+
+            filePublicId:
+                leave.stored_name,
+
+            mimeType:
+                leave.mime_type,
+
         };
 
     } catch (error) {
+
         await client.query("ROLLBACK");
 
         console.error(
@@ -435,6 +552,7 @@ const deleteLeaveRequest = async (
         throw error;
 
     } finally {
+
         client.release();
     }
 };
@@ -445,8 +563,13 @@ const deleteLeaveRequest = async (
 // ========================================
 
 module.exports = {
+
     createLeaveRequest,
+
     getMyLeaveRequests,
+
     updateLeaveRequest,
+
     deleteLeaveRequest,
+
 };

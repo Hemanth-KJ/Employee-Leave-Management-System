@@ -109,29 +109,33 @@ const ManagerLeaves = () => {
     // =========================
 
     const handleViewDocument = async (leaveId) => {
-        try {
-            const blob = await getLeaveDocument(leaveId);
+    try {
+        const data = await getLeaveDocument(leaveId);
 
-            const url =
-                window.URL.createObjectURL(blob);
-
-            window.open(url, "_blank");
-
-            setTimeout(() => {
-                window.URL.revokeObjectURL(url);
-            }, 10000);
-        } catch (error) {
-            console.error(
-                "Failed to open document:",
-                error
-            );
-
-            alert(
-                error.response?.data?.message ||
-                    "Failed to open document."
-            );
+        if (!data.fileUrl) {
+            throw new Error("Document URL not found");
         }
-    };
+
+        window.open(
+            data.fileUrl,
+            "_blank",
+            "noopener,noreferrer"
+        );
+
+    } catch (error) {
+
+        console.error(
+            "Failed to open document:",
+            error
+        );
+
+        alert(
+            error.response?.data?.message ||
+                error.message ||
+                "Failed to open document."
+        );
+    }
+};
 
     // =========================
     // REVIEW MODAL

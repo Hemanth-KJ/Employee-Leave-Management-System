@@ -545,16 +545,13 @@ const updateLeaveStatus = async (req, res) => {
     }
 };
 
-
 // ======================================================
 // GET SUPPORTING DOCUMENT
 // ======================================================
 
 const getDocument = async (req, res) => {
     try {
-
         const { id } = req.params;
-
 
         const result = await pool.query(
             `
@@ -568,58 +565,41 @@ const getDocument = async (req, res) => {
             [id]
         );
 
-
         if (result.rows.length === 0) {
             return res.status(404).json({
                 success: false,
-                message:
-                    "Document not found",
+                message: "Document not found",
             });
         }
 
+        const document = result.rows[0];
 
-        const document =
-            result.rows[0];
+        // ==============================================
+        // CLOUDINARY FILE
+        // ==============================================
 
-
-        // Check file exists
-
-        if (
-            !fs.existsSync(
-                document.file_path
-            )
-        ) {
+        if (!document.file_path) {
             return res.status(404).json({
                 success: false,
-                message:
-                    "File not found on server",
+                message: "Document URL not found",
             });
         }
 
+        console.log("========================================");
+        console.log("Opening Cloudinary document:");
+        console.log(document.file_path);
+        console.log("========================================");
 
-        // Content type
+        // ==============================================
+        // RETURN CLOUDINARY URL
+        // ==============================================
 
-        res.setHeader(
-            "Content-Type",
-            document.mime_type ||
-                "application/octet-stream"
-        );
-
-
-        // Display file in browser
-
-        res.setHeader(
-            "Content-Disposition",
-            `inline; filename="${document.original_name}"`
-        );
-
-
-        return res.sendFile(
-            path.resolve(
-                document.file_path
-            )
-        );
-
+        return res.status(200).json({
+            success: true,
+            originalName: document.original_name,
+            mimeType: document.mime_type,
+            fileUrl: document.file_path,
+        });
 
     } catch (error) {
 

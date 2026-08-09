@@ -1,12 +1,14 @@
 const leaveService = require("../services/leaveService");
-const fs = require("fs");
+const cloudinary = require("cloudinary").v2;
 
 // ========================================
 // CREATE LEAVE REQUEST
 // ========================================
 
 const createLeaveRequest = async (req, res) => {
+
     try {
+
         const {
             reason,
             start_date,
@@ -22,6 +24,7 @@ const createLeaveRequest = async (req, res) => {
             !start_date ||
             !end_date
         ) {
+
             return res.status(400).json({
                 success: false,
                 message:
@@ -34,6 +37,7 @@ const createLeaveRequest = async (req, res) => {
         // ========================================
 
         if (!req.file) {
+
             return res.status(400).json({
                 success: false,
                 message:
@@ -49,6 +53,7 @@ const createLeaveRequest = async (req, res) => {
         const endDate = new Date(end_date);
 
         if (endDate < startDate) {
+
             return res.status(400).json({
                 success: false,
                 message:
@@ -75,36 +80,70 @@ const createLeaveRequest = async (req, res) => {
                 file: req.file,
             });
 
+        // ========================================
+        // SUCCESS
+        // ========================================
+
         return res.status(201).json({
+
             success: true,
+
             message:
                 "Leave request submitted successfully",
+
             leaveRequest,
+
         });
 
     } catch (error) {
 
         // ========================================
-        // DELETE UPLOADED FILE IF DB OPERATION FAILS
+        // DELETE CLOUDINARY FILE
+        // IF DATABASE OPERATION FAILS
         // ========================================
 
         if (
             req.file &&
-            req.file.path
+            req.file.filename
         ) {
+
             try {
+
+                // ========================================
+                // DETERMINE RESOURCE TYPE
+                // ========================================
+
+                let resourceType = "image";
+
                 if (
-                    fs.existsSync(
-                        req.file.path
-                    )
+                    req.file.mimetype ===
+                    "application/pdf"
                 ) {
-                    fs.unlinkSync(
-                        req.file.path
-                    );
+
+                    resourceType = "raw";
                 }
+
+                // ========================================
+                // DELETE CLOUDINARY FILE
+                // ========================================
+
+                await cloudinary.uploader.destroy(
+                    req.file.filename,
+                    {
+                        resource_type:
+                            resourceType,
+                    }
+                );
+
+                console.log(
+                    "Deleted uploaded Cloudinary file:",
+                    req.file.filename
+                );
+
             } catch (fileError) {
+
                 console.error(
-                    "Failed to delete uploaded file:",
+                    "Failed to delete uploaded Cloudinary file:",
                     fileError.message
                 );
             }
@@ -116,13 +155,15 @@ const createLeaveRequest = async (req, res) => {
         );
 
         return res.status(500).json({
+
             success: false,
+
             message:
                 "Failed to create leave request",
+
         });
     }
 };
-
 
 // ========================================
 // GET MY LEAVE REQUESTS
@@ -132,10 +173,18 @@ const getMyLeaveRequests = async (
     req,
     res
 ) => {
+
     try {
 
-        // Employee ID comes from JWT
+        // ========================================
+        // EMPLOYEE ID FROM JWT
+        // ========================================
+
         const employeeId = req.user.id;
+
+        // ========================================
+        // GET LEAVE REQUESTS
+        // ========================================
 
         const leaveRequests =
             await leaveService.getMyLeaveRequests(
@@ -143,9 +192,14 @@ const getMyLeaveRequests = async (
             );
 
         return res.status(200).json({
+
             success: true,
-            count: leaveRequests.length,
+
+            count:
+                leaveRequests.length,
+
             leaveRequests,
+
         });
 
     } catch (error) {
@@ -156,13 +210,15 @@ const getMyLeaveRequests = async (
         );
 
         return res.status(500).json({
+
             success: false,
+
             message:
                 "Failed to retrieve leave history",
+
         });
     }
 };
-
 
 // ========================================
 // UPDATE LEAVE REQUEST
@@ -172,6 +228,7 @@ const updateLeaveRequest = async (
     req,
     res
 ) => {
+
     try {
 
         const { id } = req.params;
@@ -192,10 +249,14 @@ const updateLeaveRequest = async (
             !startDate ||
             !endDate
         ) {
+
             return res.status(400).json({
+
                 success: false,
+
                 message:
                     "Reason, start date and end date are required",
+
             });
         }
 
@@ -207,10 +268,14 @@ const updateLeaveRequest = async (
         const end = new Date(endDate);
 
         if (end < start) {
+
             return res.status(400).json({
+
                 success: false,
+
                 message:
                     "End date cannot be before start date",
+
             });
         }
 
@@ -233,11 +298,19 @@ const updateLeaveRequest = async (
                 endDate
             );
 
+        // ========================================
+        // SUCCESS
+        // ========================================
+
         return res.status(200).json({
+
             success: true,
+
             message:
                 "Leave request updated successfully",
+
             leaveRequest: leave,
+
         });
 
     } catch (error) {
@@ -255,9 +328,14 @@ const updateLeaveRequest = async (
             error.message ===
             "Leave request not found"
         ) {
+
             return res.status(404).json({
+
                 success: false,
-                message: error.message,
+
+                message:
+                    error.message,
+
             });
         }
 
@@ -269,29 +347,33 @@ const updateLeaveRequest = async (
             error.message ===
             "Only pending leave requests can be updated"
         ) {
+
             return res.status(400).json({
+
                 success: false,
-                message: error.message,
+
+                message:
+                    error.message,
+
             });
         }
 
         return res.status(500).json({
+
             success: false,
+
             message:
                 "Failed to update leave request",
+
         });
     }
 };
-
 
 // ========================================
 // DELETE LEAVE REQUEST
 // ========================================
 
-const deleteLeaveRequest = async (
-    req,
-    res
-) => {
+const deleteLeaveRequest = async (req, res) => {
 
     try {
 
@@ -304,7 +386,7 @@ const deleteLeaveRequest = async (
         const employeeId = req.user.id;
 
         // ========================================
-        // DELETE LEAVE
+        // DELETE LEAVE FROM DATABASE
         // ========================================
 
         const result =
@@ -314,25 +396,59 @@ const deleteLeaveRequest = async (
             );
 
         // ========================================
-        // DELETE PHYSICAL UPLOADED FILE
+        // DELETE FILE FROM CLOUDINARY
         // ========================================
 
-        if (
-            result.filePath &&
-            fs.existsSync(
-                result.filePath
-            )
-        ) {
+        if (result.filePublicId) {
 
-            fs.unlinkSync(
-                result.filePath
-            );
+            try {
 
-            console.log(
-                "Deleted uploaded file:",
-                result.filePath
-            );
+                console.log(
+                    "========================================"
+                );
+
+                console.log(
+                    "Deleting Cloudinary file:",
+                    result.filePublicId
+                );
+
+                console.log(
+                    "Cloudinary resource type: image"
+                );
+
+                // ========================================
+                // DELETE CLOUDINARY RESOURCE
+                // ========================================
+
+                const cloudinaryResult =
+                    await cloudinary.uploader.destroy(
+                        result.filePublicId,
+                        {
+                            resource_type: "image",
+                        }
+                    );
+
+                console.log(
+                    "Cloudinary delete result:",
+                    cloudinaryResult
+                );
+
+                console.log(
+                    "========================================"
+                );
+
+            } catch (fileError) {
+
+                console.error(
+                    "Failed to delete Cloudinary file:",
+                    fileError.message
+                );
+            }
         }
+
+        // ========================================
+        // SUCCESS RESPONSE
+        // ========================================
 
         return res.status(200).json({
 
@@ -388,6 +504,10 @@ const deleteLeaveRequest = async (
             });
         }
 
+        // ========================================
+        // SERVER ERROR
+        // ========================================
+
         return res.status(500).json({
 
             success: false,
@@ -398,7 +518,6 @@ const deleteLeaveRequest = async (
         });
     }
 };
-
 
 // ========================================
 // EXPORT CONTROLLERS

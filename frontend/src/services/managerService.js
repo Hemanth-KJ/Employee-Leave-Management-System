@@ -49,14 +49,9 @@ export const updateLeaveStatus = async (
 };
 
 
-export const getLeaveDocument = async (
-    leaveId
-) => {
+export const getLeaveDocument = async (leaveId) => {
     const response = await api.get(
-        `/manager/leaves/${leaveId}/document`,
-        {
-            responseType: "blob",
-        }
+        `/manager/leaves/${leaveId}/document`
     );
 
     return response.data;
